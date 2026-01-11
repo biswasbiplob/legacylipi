@@ -1,0 +1,99 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "legacylipi"
+version = "0.1.0"
+description = "Legacy Font PDF Translator - Translate PDFs with legacy Indian font encodings to English"
+readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "Biplob Biswas", email = "biplob@example.com" }
+]
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Text Processing :: Linguistic",
+]
+dependencies = [
+    "pymupdf>=1.23.0",
+    "click>=8.1.0",
+    "rich>=13.0.0",
+    "pyyaml>=6.0",
+    "httpx>=0.25.0",
+    "tenacity>=8.2.0",
+    "deep-translator>=1.11.4",
+    "pytesseract>=0.3.13",
+    "pillow>=12.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.21.0",
+    "mypy>=1.5.0",
+    "ruff>=0.1.0",
+]
+ollama = [
+    "ollama>=0.1.0",
+]
+google = [
+    "google-cloud-translate>=3.12.0",
+]
+
+[project.scripts]
+legacylipi = "legacylipi.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/user/legacylipi"
+Documentation = "https://github.com/user/legacylipi#readme"
+Repository = "https://github.com/user/legacylipi"
+Issues = "https://github.com/user/legacylipi/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/legacylipi"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
+ignore = ["E501"]
+
+[tool.coverage.run]
+source = ["src/legacylipi"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
