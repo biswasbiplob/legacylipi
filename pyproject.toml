@@ -49,9 +49,13 @@ ollama = [
 google = [
     "google-cloud-translate>=3.12.0",
 ]
+ui = [
+    "nicegui>=2.0.0",
+]
 
 [project.scripts]
 legacylipi = "legacylipi.cli:main"
+legacylipi-ui = "legacylipi.ui.app:main"
 
 [project.urls]
 Homepage = "https://github.com/user/legacylipi"
