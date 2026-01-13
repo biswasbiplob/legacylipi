@@ -502,12 +502,13 @@ Generated: {metadata.generated_at}"""
         available_height: float,
         original_font_size: float,
         min_font_size: float = 5.0,
+        max_font_size: float = 12.0,
         font_path: Optional[str] = None,
     ) -> float:
         """Calculate font size that fits text within a bounding box.
 
         Strategy:
-        1. Start with original font size
+        1. Start with the smaller of original font size or max_font_size
         2. If text doesn't fit, scale down by 10% increments
         3. Stop at min_font_size
 
@@ -517,12 +518,14 @@ Generated: {metadata.generated_at}"""
             available_height: Height of bounding box in points.
             original_font_size: Original font size to start with.
             min_font_size: Minimum font size threshold.
+            max_font_size: Maximum font size cap for consistency.
             font_path: Path to font file for measurement.
 
         Returns:
             Font size that fits, or min_font_size if text is too long.
         """
-        font_size = max(min_font_size, min(original_font_size, 72.0))
+        # Cap at max_font_size for consistency across the document
+        font_size = max(min_font_size, min(original_font_size, max_font_size))
 
         # Load font for measurement if available
         font = None
@@ -725,6 +728,7 @@ Generated: {metadata.generated_at}"""
         MIN_BLOCK_WIDTH = 20
         MIN_BLOCK_HEIGHT = 10
         VERTICAL_GAP = 8  # Minimum gap between blocks (increased from 4)
+        MAX_FONT_SIZE = 12.0  # Cap font size for consistent appearance across document
 
         # Load font once for reuse
         font = None
@@ -765,13 +769,14 @@ Generated: {metadata.generated_at}"""
             if available_width <= 0 or available_height <= 0:
                 continue
 
-            # Calculate optimal font size
+            # Calculate optimal font size (capped at MAX_FONT_SIZE for consistency)
             font_size = self._calculate_block_font_size(
                 text=text,
                 available_width=available_width,
                 available_height=available_height,
                 original_font_size=block.font_size,
                 min_font_size=min_font_size,
+                max_font_size=MAX_FONT_SIZE,
                 font_path=font_path,
             )
 

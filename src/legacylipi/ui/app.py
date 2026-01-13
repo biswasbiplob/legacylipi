@@ -56,7 +56,7 @@ TRANSLATION_MODES = {
     "flowing": "Flowing Text (Standard)",
 }
 
-OPENAI_MODELS = ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"]
+OPENAI_MODELS = ["gpt-5.2-pro", "gpt-5.2", "gpt-5.1", "gpt-5", "gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"]
 OLLAMA_MODELS = ["llama3.2", "llama3.1", "llama2", "mistral", "phi", "gemma"]
 
 
@@ -246,7 +246,7 @@ class TranslationUI:
                     min=100,
                     max=600,
                     step=50,
-                    on_change=lambda e: setattr(self, "ocr_dpi", int(e.value)),
+                    on_change=lambda e: setattr(self, "ocr_dpi", int(e.value)) if e.value is not None else None,
                 ).classes("flex-1")
 
     def _toggle_ocr(self, e):
@@ -453,13 +453,21 @@ class TranslationUI:
                             self.status_label.set_text(f"Translating block {completed}/{total}...")
 
                         # Translate blocks concurrently with rate limiting
-                        await engine.translate_blocks_async(
-                            all_blocks,
-                            source_lang="mr",
-                            target_lang=self.target_lang,
-                            max_concurrent=3,
-                            progress_callback=update_progress,
-                        )
+                        try:
+                            await engine.translate_blocks_async(
+                                all_blocks,
+                                source_lang="mr",
+                                target_lang=self.target_lang,
+                                max_concurrent=3,
+                                progress_callback=update_progress,
+                            )
+                            # Check if any blocks were actually translated
+                            translated_count = sum(1 for b in all_blocks if b.translated_text and b.translated_text != (b.unicode_text or b.raw_text))
+                            if translated_count == 0:
+                                ui.notify("Warning: No blocks were translated. Check API key and model.", type="warning")
+                        except Exception as e:
+                            ui.notify(f"Translation error: {e}", type="negative")
+                            raise
                     else:
                         # No positioned blocks - fall back to flowing mode
                         use_structure_preserving = False
@@ -473,10 +481,16 @@ class TranslationUI:
                     unicode_text = "\n\n".join(text_parts)
 
                     # Run translation (this is sync, wrap in executor)
-                    translation_result = await loop.run_in_executor(
-                        None,
-                        lambda: engine.translate(unicode_text, source_lang="mr", target_lang=self.target_lang),
-                    )
+                    try:
+                        translation_result = await loop.run_in_executor(
+                            None,
+                            lambda: engine.translate(unicode_text, source_lang="mr", target_lang=self.target_lang),
+                        )
+                        if not translation_result or not translation_result.translated_text:
+                            ui.notify("Warning: Translation returned empty result. Check API key and model.", type="warning")
+                    except Exception as e:
+                        ui.notify(f"Translation error: {e}", type="negative")
+                        raise
 
                 self.progress_bar.set_value(0.8)
                 self.status_label.set_text("Generating output...")

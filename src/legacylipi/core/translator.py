@@ -802,11 +802,13 @@ class OpenAITranslationBackend(TranslationBackendBase):
             {"role": "user", "content": text},
         ]
 
+        # GPT-5+ models use max_completion_tokens instead of max_tokens
+        token_param = "max_completion_tokens" if self._model.startswith("gpt-5") else "max_tokens"
         payload = {
             "model": self._model,
             "messages": messages,
             "temperature": self._temperature,
-            "max_tokens": 4096,
+            token_param: 4096,
         }
 
         headers = {
@@ -1064,8 +1066,10 @@ class TranslationEngine:
                         block.translated_text = await self._backend.translate(
                             text.strip(), source, target
                         )
-                    except TranslationError:
-                        # Keep original text on failure
+                    except TranslationError as e:
+                        # Log the error and keep original text on failure
+                        import logging
+                        logging.warning(f"Translation failed for block: {e}")
                         block.translated_text = text
                 else:
                     block.translated_text = text or ""
