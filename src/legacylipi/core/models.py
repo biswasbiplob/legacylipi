@@ -94,6 +94,7 @@ class TextBlock:
     detected_encoding: Optional[str] = None
     unicode_text: Optional[str] = None
     confidence: float = 0.0
+    translated_text: Optional[str] = None  # Store block-level translation
 
     @property
     def is_converted(self) -> bool:
@@ -101,9 +102,21 @@ class TextBlock:
         return self.unicode_text is not None
 
     @property
+    def is_translated(self) -> bool:
+        """Check if this block has been translated."""
+        return self.translated_text is not None
+
+    @property
     def text(self) -> str:
         """Get the best available text (Unicode if converted, otherwise raw)."""
         return self.unicode_text if self.unicode_text is not None else self.raw_text
+
+    @property
+    def display_text(self) -> str:
+        """Get best text for display: translated > unicode > raw."""
+        if self.translated_text:
+            return self.translated_text
+        return self.unicode_text if self.unicode_text else self.raw_text
 
 
 @dataclass

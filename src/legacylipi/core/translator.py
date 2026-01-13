@@ -11,7 +11,9 @@ from dataclasses import dataclass
 
 import httpx
 
-from legacylipi.core.models import TranslationBackend, TranslationResult
+from typing import Callable
+
+from legacylipi.core.models import TextBlock, TranslationBackend, TranslationResult
 
 
 class TranslationError(Exception):
@@ -1012,6 +1014,97 @@ class TranslationEngine:
             translation_backend=self.backend_type,
             chunk_count=len(chunks),
             warnings=warnings,
+        )
+
+    async def translate_blocks_async(
+        self,
+        blocks: list[TextBlock],
+        source_lang: str | None = None,
+        target_lang: str | None = None,
+        max_concurrent: int = 3,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> list[TextBlock]:
+        """Translate multiple text blocks concurrently for structure-preserving translation.
+
+        Translates each block individually while preserving positional information.
+        Uses a semaphore to limit concurrent API calls and avoid rate limiting.
+
+        Args:
+            blocks: List of TextBlock objects to translate.
+            source_lang: Source language code. Uses config default if None.
+            target_lang: Target language code. Uses config default if None.
+            max_concurrent: Maximum concurrent translation requests (default 3).
+            progress_callback: Optional callback(completed, total) for progress updates.
+
+        Returns:
+            Same blocks with translated_text field populated.
+        """
+        source = source_lang or self._config.source_language
+        target = target_lang or self._config.target_language
+
+        # Filter to blocks that have text to translate
+        translatable_blocks = [
+            b for b in blocks
+            if (b.unicode_text or b.raw_text or "").strip()
+        ]
+
+        if not translatable_blocks:
+            return blocks
+
+        semaphore = asyncio.Semaphore(max_concurrent)
+        completed = 0
+        total = len(translatable_blocks)
+
+        async def translate_single(block: TextBlock) -> None:
+            nonlocal completed
+            async with semaphore:
+                text = block.unicode_text or block.raw_text
+                if text and text.strip():
+                    try:
+                        block.translated_text = await self._backend.translate(
+                            text.strip(), source, target
+                        )
+                    except TranslationError:
+                        # Keep original text on failure
+                        block.translated_text = text
+                else:
+                    block.translated_text = text or ""
+
+                completed += 1
+                if progress_callback:
+                    progress_callback(completed, total)
+
+        # Translate all blocks concurrently (with semaphore limiting)
+        await asyncio.gather(*[translate_single(b) for b in translatable_blocks])
+
+        return blocks
+
+    def translate_blocks(
+        self,
+        blocks: list[TextBlock],
+        source_lang: str | None = None,
+        target_lang: str | None = None,
+        max_concurrent: int = 3,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> list[TextBlock]:
+        """Translate multiple text blocks synchronously.
+
+        This is a convenience wrapper around translate_blocks_async.
+
+        Args:
+            blocks: List of TextBlock objects to translate.
+            source_lang: Source language code.
+            target_lang: Target language code.
+            max_concurrent: Maximum concurrent translation requests.
+            progress_callback: Optional callback for progress updates.
+
+        Returns:
+            Same blocks with translated_text field populated.
+        """
+        return asyncio.run(
+            self.translate_blocks_async(
+                blocks, source_lang, target_lang, max_concurrent, progress_callback
+            )
         )
 
     def translate(

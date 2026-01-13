@@ -315,6 +315,7 @@ Generated: {metadata.generated_at}"""
         translated_text: Optional[str] = None,
         output_path: Optional[Path] = None,
         preserve_structure: bool = True,
+        structure_preserving_translation: bool = False,
     ) -> bytes:
         """Generate PDF output preserving document structure.
 
@@ -325,6 +326,8 @@ Generated: {metadata.generated_at}"""
             translated_text: Translated text to use (overrides translation_result).
             output_path: Optional path to save PDF directly.
             preserve_structure: If True, preserve original page dimensions and text positions.
+            structure_preserving_translation: If True, use block-level translation with
+                position preservation (blocks must have translated_text populated).
 
         Returns:
             PDF content as bytes.
@@ -337,6 +340,20 @@ Generated: {metadata.generated_at}"""
 
         # Find a font that supports the content
         font_path = self._get_unicode_font()
+
+        # Check for structure-preserving translation mode
+        if structure_preserving_translation:
+            # Check if we have translated blocks with positions
+            has_translated_blocks = any(
+                block.translated_text is not None
+                for page in document.pages
+                for block in page.text_blocks
+                if block.position is not None
+            )
+            if has_translated_blocks:
+                return self._generate_pdf_structure_preserving_translation(
+                    pdf_doc, document, metadata, output_path, font_path
+                )
 
         # Only preserve structure when NOT translating - translated text has different
         # length and structure, so we must use flowing A4 layout for translations
@@ -477,6 +494,409 @@ Generated: {metadata.generated_at}"""
             self._insert_text_with_font(
                 page, x, y, text.strip(), font_size, font_path
             )
+
+    def _calculate_block_font_size(
+        self,
+        text: str,
+        available_width: float,
+        available_height: float,
+        original_font_size: float,
+        min_font_size: float = 5.0,
+        font_path: Optional[str] = None,
+    ) -> float:
+        """Calculate font size that fits text within a bounding box.
+
+        Strategy:
+        1. Start with original font size
+        2. If text doesn't fit, scale down by 10% increments
+        3. Stop at min_font_size
+
+        Args:
+            text: Text to fit.
+            available_width: Width of bounding box in points.
+            available_height: Height of bounding box in points.
+            original_font_size: Original font size to start with.
+            min_font_size: Minimum font size threshold.
+            font_path: Path to font file for measurement.
+
+        Returns:
+            Font size that fits, or min_font_size if text is too long.
+        """
+        font_size = max(min_font_size, min(original_font_size, 72.0))
+
+        # Load font for measurement if available
+        font = None
+        if font_path and Path(font_path).exists():
+            try:
+                font = fitz.Font(fontfile=font_path)
+            except Exception:
+                pass
+
+        while font_size >= min_font_size:
+            # Wrap text at current font size
+            lines = self._wrap_text_to_width_precise(
+                text, available_width, font_size, font
+            )
+
+            # Calculate total height needed (line_height = font_size * 1.2)
+            line_height = font_size * 1.2
+            total_height = len(lines) * line_height
+
+            if total_height <= available_height:
+                return font_size
+
+            font_size *= 0.9  # Scale down by 10%
+
+        return min_font_size
+
+    def _wrap_text_to_width_precise(
+        self,
+        text: str,
+        max_width: float,
+        font_size: float,
+        font: Optional[fitz.Font] = None,
+    ) -> list[str]:
+        """Wrap text using font metrics for precise measurement.
+
+        Args:
+            text: Text to wrap.
+            max_width: Maximum width in points.
+            font_size: Font size being used.
+            font: fitz.Font object for measurement (optional).
+
+        Returns:
+            List of wrapped lines.
+        """
+        lines = []
+
+        for paragraph in text.split('\n'):
+            if not paragraph.strip():
+                lines.append('')
+                continue
+
+            words = paragraph.split()
+            current_line: list[str] = []
+            current_width = 0.0
+
+            for word in words:
+                if font:
+                    word_width = font.text_length(word, fontsize=font_size)
+                    space_width = font.text_length(' ', fontsize=font_size)
+                else:
+                    # Fallback estimation (average char width ~0.5 * font_size)
+                    word_width = len(word) * font_size * 0.5
+                    space_width = font_size * 0.25
+
+                test_width = current_width + (space_width if current_line else 0) + word_width
+
+                if test_width <= max_width:
+                    current_line.append(word)
+                    current_width = test_width
+                else:
+                    if current_line:
+                        lines.append(' '.join(current_line))
+                    current_line = [word]
+                    current_width = word_width
+
+            if current_line:
+                lines.append(' '.join(current_line))
+
+        return lines if lines else ['']
+
+    def _preprocess_overlapping_blocks(
+        self,
+        blocks: list,
+        gap: float = 4.0,
+    ) -> list:
+        """Detect and resolve overlapping bounding boxes before rendering.
+
+        OCR can produce blocks with overlapping or touching bounding boxes.
+        This pre-processing step detects such overlaps and adjusts block
+        positions to prevent text from overlapping in the output.
+
+        Args:
+            blocks: List of (TextBlock, text) tuples with position data.
+            gap: Minimum gap to maintain between blocks.
+
+        Returns:
+            List of (TextBlock, text) tuples with adjusted positions.
+        """
+        if not blocks:
+            return blocks
+
+        # Create mutable copies of position data for adjustment
+        # We'll track adjusted y0 values separately to avoid modifying originals
+        adjusted_blocks = []
+        for block, text in blocks:
+            # Store original bbox and create adjustment info
+            bbox = block.position
+            adjusted_blocks.append({
+                'block': block,
+                'text': text,
+                'orig_y0': bbox.y0,
+                'orig_y1': bbox.y1,
+                'adj_y0': bbox.y0,  # Will be adjusted if overlap detected
+                'x0': bbox.x0,
+                'x1': bbox.x1,
+            })
+
+        # Sort by y0 first, then x0 (top-to-bottom, left-to-right)
+        adjusted_blocks.sort(key=lambda b: (b['orig_y0'], b['x0']))
+
+        # Track occupied regions: list of (y_end, x0, x1)
+        occupied = []
+
+        for i, item in enumerate(adjusted_blocks):
+            # Check for overlap with all previously processed blocks
+            intended_y0 = item['orig_y0']
+            min_y0 = intended_y0
+
+            for (occ_y_end, occ_x0, occ_x1) in occupied:
+                # Check horizontal overlap
+                if not (item['x1'] < occ_x0 or item['x0'] > occ_x1):
+                    # Horizontal overlap exists
+                    # Check if current block starts before occupied region ends
+                    if intended_y0 < occ_y_end + gap:
+                        # Overlap detected - push down
+                        if occ_y_end + gap > min_y0:
+                            min_y0 = occ_y_end + gap
+
+            # Apply adjustment
+            item['adj_y0'] = min_y0
+
+            # Calculate adjusted y1 (maintain original height)
+            height = item['orig_y1'] - item['orig_y0']
+            adj_y1 = min_y0 + height
+
+            # Record this block's occupied region
+            occupied.append((adj_y1, item['x0'], item['x1']))
+
+        # Return adjusted blocks with modified position info
+        # We need to create new BoundingBox objects with adjusted y values
+        from legacylipi.core.models import BoundingBox
+
+        result = []
+        for item in adjusted_blocks:
+            block = item['block']
+            text = item['text']
+
+            # If position was adjusted, create a modified block
+            if item['adj_y0'] != item['orig_y0']:
+                # Create adjusted bounding box
+                height = item['orig_y1'] - item['orig_y0']
+                adjusted_bbox = BoundingBox(
+                    x0=block.position.x0,
+                    y0=item['adj_y0'],
+                    x1=block.position.x1,
+                    y1=item['adj_y0'] + height,
+                )
+                # Create a copy of the block with adjusted position
+                # We use dataclasses.replace if available, otherwise manual copy
+                from dataclasses import replace
+                adjusted_block = replace(block, position=adjusted_bbox)
+                result.append((adjusted_block, text))
+            else:
+                result.append((block, text))
+
+        return result
+
+    def _place_translated_blocks_with_positions(
+        self,
+        page: fitz.Page,
+        text_blocks: list,
+        font_path: Optional[str],
+        min_font_size: float = 5.0,
+        padding: float = 2.0,
+    ) -> None:
+        """Place translated text blocks at original positions with font scaling.
+
+        For structure-preserving translation: places translated text at original
+        positions, scaling font size to fit within original bounding boxes.
+        Includes collision detection to prevent overlapping text.
+
+        Args:
+            page: The fitz page to write to.
+            text_blocks: List of TextBlock objects with position and translated_text.
+            font_path: Path to Unicode font.
+            min_font_size: Minimum font size threshold (don't go below this).
+            padding: Padding inside bounding box.
+        """
+        # Constants for edge cases
+        MIN_BLOCK_WIDTH = 20
+        MIN_BLOCK_HEIGHT = 10
+        VERTICAL_GAP = 8  # Minimum gap between blocks (increased from 4)
+
+        # Load font once for reuse
+        font = None
+        if font_path and Path(font_path).exists():
+            try:
+                font = fitz.Font(fontfile=font_path)
+            except Exception:
+                pass
+
+        # Filter valid blocks
+        valid_blocks = []
+        for block in text_blocks:
+            text = block.translated_text or block.unicode_text or block.raw_text
+            if not text or not text.strip():
+                continue
+            if not block.position:
+                continue
+            bbox = block.position
+            if bbox.width < MIN_BLOCK_WIDTH or bbox.height < MIN_BLOCK_HEIGHT:
+                continue
+            valid_blocks.append((block, text))
+
+        # Pre-process blocks to detect and resolve overlapping source bboxes
+        # This handles the case where OCR produces overlapping bounding boxes
+        valid_blocks = self._preprocess_overlapping_blocks(valid_blocks, gap=VERTICAL_GAP)
+
+        # Track occupied vertical regions per column (approximate column detection)
+        # Format: list of (y_end, x0, x1) tuples representing rendered regions
+        occupied_regions: list[tuple[float, float, float]] = []
+
+        for block, text in valid_blocks:
+            bbox = block.position
+
+            # Calculate available space (with padding)
+            available_width = bbox.width - (2 * padding)
+            available_height = bbox.height - (2 * padding)
+
+            if available_width <= 0 or available_height <= 0:
+                continue
+
+            # Calculate optimal font size
+            font_size = self._calculate_block_font_size(
+                text=text,
+                available_width=available_width,
+                available_height=available_height,
+                original_font_size=block.font_size,
+                min_font_size=min_font_size,
+                font_path=font_path,
+            )
+
+            # Wrap text to fit width
+            wrapped_lines = self._wrap_text_to_width_precise(
+                text=text,
+                max_width=available_width,
+                font_size=font_size,
+                font=font,
+            )
+
+            line_height = font_size * 1.2
+            total_text_height = len(wrapped_lines) * line_height
+
+            # Calculate starting Y position, checking for collisions
+            intended_y_start = bbox.y0 + padding
+
+            # Find the lowest occupied region that overlaps horizontally with this block
+            min_y_start = intended_y_start
+            for (occupied_y_end, occupied_x0, occupied_x1) in occupied_regions:
+                # Check if there's horizontal overlap
+                if not (bbox.x1 < occupied_x0 or bbox.x0 > occupied_x1):
+                    # Horizontal overlap exists - ensure we start below this region
+                    if occupied_y_end + VERTICAL_GAP > min_y_start:
+                        min_y_start = occupied_y_end + VERTICAL_GAP
+
+            # Use the adjusted Y position (may be pushed down to avoid overlap)
+            y_start = max(intended_y_start, min_y_start)
+
+            # Position: top-left of bbox + padding + font baseline offset
+            x = bbox.x0 + padding
+            y = y_start + font_size  # Add font_size for baseline
+
+            # Render each line
+            lines_rendered = 0
+            final_y = y  # Track actual final y position after rendering
+            for line in wrapped_lines:
+                # Allow text to extend somewhat beyond original bbox if needed
+                # to avoid truncation, but stop at page boundary
+                page_height = page.rect.height
+                if y > page_height - padding:
+                    break
+
+                self._insert_text_with_font(
+                    page, x, y, line.strip(),
+                    font_size, font_path
+                )
+                y += line_height
+                final_y = y  # Update to track where we actually ended
+                lines_rendered += 1
+
+            # Record the occupied region using actual final y position
+            # This ensures collision detection uses the real rendered bounds
+            if lines_rendered > 0:
+                # final_y is the position where the NEXT line would start
+                # which is effectively the bottom of the rendered region
+                occupied_regions.append((final_y, bbox.x0, bbox.x1))
+
+    def _generate_pdf_structure_preserving_translation(
+        self,
+        pdf_doc: fitz.Document,
+        document: PDFDocument,
+        metadata: OutputMetadata,
+        output_path: Optional[Path],
+        font_path: Optional[str],
+    ) -> bytes:
+        """Generate PDF with translated text at original block positions.
+
+        This method creates a PDF where each translated text block is placed
+        at its original position with font scaling to fit within bounds.
+
+        Args:
+            pdf_doc: The fitz document to write to.
+            document: The processed PDF document with translated blocks.
+            metadata: Output metadata.
+            output_path: Optional path to save PDF.
+            font_path: Path to Unicode font.
+
+        Returns:
+            PDF content as bytes.
+        """
+        # Add metadata page if enabled
+        if self._include_metadata and document.pages:
+            first_page = document.pages[0]
+            page_width = first_page.width if first_page.width > 0 else 595
+            page_height = first_page.height if first_page.height > 0 else 842
+            meta_page = pdf_doc.new_page(width=page_width, height=page_height)
+            margin = min(50, page_width * 0.08)
+            self._add_metadata_to_pdf_page(meta_page, metadata, margin, 11, font_path)
+
+        # Process each page
+        for page_data in document.pages:
+            # Use original page dimensions
+            page_width = page_data.width if page_data.width > 0 else 595
+            page_height = page_data.height if page_data.height > 0 else 842
+
+            # Create new page with original dimensions
+            new_page = pdf_doc.new_page(width=page_width, height=page_height)
+
+            # Get positioned blocks (those with bounding box data)
+            positioned_blocks = [b for b in page_data.text_blocks if b.position]
+
+            if positioned_blocks:
+                self._place_translated_blocks_with_positions(
+                    new_page, positioned_blocks, font_path
+                )
+            else:
+                # Fallback: render as flowing text if no position data
+                margin = 50
+                y = margin
+                for block in page_data.text_blocks:
+                    text = block.translated_text or block.unicode_text or block.raw_text
+                    if text:
+                        self._insert_text_with_font(
+                            new_page, margin, y, text.strip(), 11, font_path
+                        )
+                        y += 16
+
+        pdf_bytes = pdf_doc.tobytes()
+
+        if output_path:
+            pdf_doc.save(output_path)
+
+        pdf_doc.close()
+        return pdf_bytes
 
     def _generate_pdf_a4_layout(
         self,
