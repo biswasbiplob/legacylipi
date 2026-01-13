@@ -95,6 +95,9 @@ class TextBlock:
     unicode_text: Optional[str] = None
     confidence: float = 0.0
     translated_text: Optional[str] = None  # Store block-level translation
+    font_category: Optional[str] = None  # heading, body, or caption (set by FontSizeAnalyzer)
+    is_bold: bool = False
+    is_italic: bool = False
 
     @property
     def is_converted(self) -> bool:

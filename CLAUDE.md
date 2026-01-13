@@ -132,3 +132,68 @@ Unicode fonts searched in order:
 | `guj` | Gujarati |
 | `pan` | Punjabi |
 | `san` | Sanskrit |
+
+## Automated Testing with Playwright MCP
+
+Use Playwright MCP tools to automate UI testing after code changes.
+
+### Test Workflow
+
+1. **Start the server** (if not running):
+   ```bash
+   uv run python -m legacylipi.ui.app &
+   ```
+
+2. **Navigate to UI**:
+   ```
+   mcp__playwright__browser_navigate: http://localhost:8080
+   ```
+
+3. **Upload test PDF**:
+   ```
+   mcp__playwright__browser_click: "Choose File" button
+   mcp__playwright__browser_file_upload: ["/path/to/test.pdf"]
+   ```
+
+4. **Configure settings**:
+   ```
+   mcp__playwright__browser_click: "Use OCR" checkbox
+   # Verify Structure Preserving mode is selected
+   # Verify PDF output format
+   ```
+
+5. **Run translation**:
+   ```
+   mcp__playwright__browser_click: "Translate" button
+   mcp__playwright__browser_wait_for: Wait for completion (check for "Download" button)
+   ```
+
+6. **Download and verify output**:
+   ```
+   mcp__playwright__browser_click: "Download" button
+   # Read the generated PDF to verify output
+   ```
+
+7. **Evaluate output quality** (Critical step):
+   - Open translated PDF and source PDF side-by-side
+   - Check font consistency: All body text should be uniform 11pt
+   - Verify no wildly varying font sizes across pages
+   - Check text positioning: Translated text should be at similar positions to source
+   - If fonts are inconsistent, check `_place_translated_blocks_with_positions()` in output_generator.py
+   - Common issue: Font scaling to fit bounding boxes causes inconsistent sizes
+
+### Key UI Elements (refs may change)
+
+| Element | Description |
+|---------|-------------|
+| Upload area | Drop zone or "Choose File" button |
+| OCR checkbox | "Use OCR (for scanned/image PDFs)" |
+| Translation Mode | Combobox: "Structure Preserving" or "Flowing Text" |
+| Output Format | Combobox: PDF, Text, Markdown |
+| Translate button | Main action button |
+| Status area | Shows progress and completion |
+| Download button | Appears after successful translation |
+
+### Test PDF Location
+
+Test file: `Marathi-Bhascyacha-vaapar.pdf` (135KB, 11 pages)
