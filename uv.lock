@@ -941,6 +941,7 @@ dependencies = [
     { name = "click" },
     { name = "deep-translator" },
     { name = "httpx" },
+    { name = "nicegui" },
     { name = "pillow" },
     { name = "pymupdf" },
     { name = "pytesseract" },
@@ -963,9 +964,6 @@ google = [
 ollama = [
     { name = "ollama" },
 ]
-ui = [
-    { name = "nicegui" },
-]
 
 [package.metadata]
 requires-dist = [
@@ -974,7 +972,7 @@ requires-dist = [
     { name = "google-cloud-translate", marker = "extra == 'google'", specifier = ">=3.12.0" },
     { name = "httpx", specifier = ">=0.25.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.5.0" },
-    { name = "nicegui", marker = "extra == 'ui'", specifier = ">=2.0.0" },
+    { name = "nicegui", specifier = ">=2.0.0" },
     { name = "ollama", marker = "extra == 'ollama'", specifier = ">=0.1.0" },
     { name = "pillow", specifier = ">=12.1.0" },
     { name = "pymupdf", specifier = ">=1.23.0" },
@@ -987,7 +985,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
     { name = "tenacity", specifier = ">=8.2.0" },
 ]
-provides-extras = ["dev", "ollama", "google", "ui"]
+provides-extras = ["dev", "ollama", "google"]
 
 [[package]]
 name = "librt"

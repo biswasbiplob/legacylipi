@@ -15,6 +15,7 @@ from typing import Callable
 
 from legacylipi.core.models import TextBlock, TranslationBackend, TranslationResult
 from legacylipi.core.utils.rate_limiter import RateLimiter
+from legacylipi.core.utils.usage_tracker import UsageTracker
 from legacylipi.core.utils.language_codes import (
     get_language_name,
     get_google_code,
@@ -27,6 +28,19 @@ class TranslationError(Exception):
     """Exception raised when translation fails."""
 
     pass
+
+
+class UsageLimitExceededError(TranslationError):
+    """Raised when free tier limit would be exceeded."""
+
+    def __init__(self, current_usage: int, limit: int, requested: int):
+        self.current_usage = current_usage
+        self.limit = limit
+        self.requested = requested
+        super().__init__(
+            f"Translation would exceed free tier: {current_usage:,}/{limit:,} chars used, "
+            f"requesting {requested:,} more. Use force=True to proceed (charges may apply)."
+        )
 
 
 @dataclass
@@ -764,6 +778,149 @@ class OpenAITranslationBackend(BaseHTTPTranslationBackend):
             raise TranslationError(f"HTTP error during OpenAI translation: {e}")
 
 
+class GCPCloudTranslateBackend(TranslationBackendBase):
+    """Google Cloud Translation API v3 backend with free tier tracking."""
+
+    FREE_TIER_LIMIT = 500_000  # chars/month
+
+    def __init__(
+        self,
+        project_id: str,
+        location: str = "global",
+        timeout: float = 60.0,
+        enforce_free_tier: bool = True,
+    ):
+        """Initialize GCP Cloud Translation backend.
+
+        Args:
+            project_id: GCP project ID.
+            location: API location (default: "global").
+            timeout: Request timeout in seconds.
+            enforce_free_tier: If True, raise error when limit exceeded.
+        """
+        self._project_id = project_id
+        self._location = location
+        self._timeout = timeout
+        self._enforce_free_tier = enforce_free_tier
+        self._client = None  # Lazy init
+        self._usage_tracker = UsageTracker()
+
+    @property
+    def backend_type(self) -> TranslationBackend:
+        return TranslationBackend.GCP_CLOUD
+
+    def _get_client(self):
+        """Get or create Translation client (lazy initialization)."""
+        if self._client is None:
+            try:
+                from google.cloud import translate_v3 as translate
+
+                self._client = translate.TranslationServiceClient()
+            except ImportError:
+                raise TranslationError(
+                    "google-cloud-translate not installed. Install with: "
+                    "pip install google-cloud-translate"
+                )
+        return self._client
+
+    async def translate(
+        self,
+        text: str,
+        source_lang: str,
+        target_lang: str,
+        force: bool = False,
+    ) -> str:
+        """Translate using GCP Cloud Translation API.
+
+        Args:
+            text: Text to translate.
+            source_lang: Source language code.
+            target_lang: Target language code.
+            force: If True, bypass free tier limit check.
+
+        Returns:
+            Translated text.
+
+        Raises:
+            UsageLimitExceededError: If limit would be exceeded and force=False.
+            TranslationError: If translation fails.
+        """
+        if not text.strip():
+            return text
+
+        char_count = len(text)
+
+        # Check free tier limit
+        if self._enforce_free_tier and not force:
+            would_exceed, current = self._usage_tracker.check_limit(
+                "gcp_translate", char_count, self.FREE_TIER_LIMIT
+            )
+            if would_exceed:
+                raise UsageLimitExceededError(current, self.FREE_TIER_LIMIT, char_count)
+
+        try:
+            import asyncio
+            from google.cloud import translate_v3 as translate
+
+            client = self._get_client()
+            parent = f"projects/{self._project_id}/locations/{self._location}"
+
+            # Map language codes
+            from legacylipi.core.utils.language_codes import get_google_code
+
+            source = get_google_code(source_lang)
+            target = get_google_code(target_lang)
+
+            # Run sync API call in executor
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: client.translate_text(
+                    request={
+                        "parent": parent,
+                        "contents": [text],
+                        "source_language_code": source,
+                        "target_language_code": target,
+                        "mime_type": "text/plain",
+                    }
+                ),
+            )
+
+            if not response.translations:
+                raise TranslationError("Empty response from GCP Translation API")
+
+            translated_text = response.translations[0].translated_text
+
+            # Track usage after successful translation
+            self._usage_tracker.add_usage("gcp_translate", char_count)
+
+            return translated_text
+
+        except ImportError:
+            raise TranslationError(
+                "google-cloud-translate not installed. Install with: "
+                "pip install google-cloud-translate"
+            )
+        except Exception as e:
+            if "UsageLimitExceededError" in str(type(e).__name__):
+                raise
+            error_msg = str(e)
+            if "403" in error_msg or "permission" in error_msg.lower():
+                raise TranslationError(
+                    f"GCP permission denied. Ensure Cloud Translation API is enabled "
+                    f"and credentials are configured: {e}"
+                )
+            raise TranslationError(f"GCP translation error: {e}")
+
+    async def close(self) -> None:
+        """Close the client."""
+        self._client = None
+
+    def get_usage_summary(self) -> dict:
+        """Get current usage summary for display."""
+        return self._usage_tracker.get_usage_summary("gcp_translate")
+
+
 class TranslationEngine:
     """Main translation engine with chunking and backend management."""
 
@@ -1046,6 +1203,21 @@ def create_translator(
         translation_backend = OllamaTranslationBackend(**kwargs)
     elif backend_lower == "openai":
         translation_backend = OpenAITranslationBackend(**kwargs)
+    elif backend_lower == "gcp_cloud":
+        project_id = kwargs.get("project_id")
+        if not project_id:
+            import os
+
+            project_id = os.environ.get("GCP_PROJECT_ID")
+        if not project_id:
+            raise ValueError(
+                "GCP project ID required. Set GCP_PROJECT_ID env var or pass project_id parameter."
+            )
+        translation_backend = GCPCloudTranslateBackend(
+            project_id=project_id,
+            location=kwargs.get("location", "global"),
+            enforce_free_tier=kwargs.get("enforce_free_tier", True),
+        )
     else:
         raise ValueError(f"Unknown translation backend: {backend}")
 

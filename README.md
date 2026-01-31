@@ -151,14 +151,17 @@ Options:
   --format [text|markdown|md|pdf] Output format (default: text)
   --encoding TEXT                 Force specific encoding
   --target-lang TEXT              Target language code (default: en)
-  --translator [mock|google|trans|mymemory|ollama|openai]
+  --translator [mock|google|trans|mymemory|ollama|openai|gcp_cloud]
                                   Translation backend
   --model TEXT                    Model for Ollama or OpenAI backend
   --trans-path TEXT               Path to trans executable (for --translator trans)
+  --gcp-project TEXT              GCP project ID (required for gcp_cloud backend)
+  --force-translate               Continue translation even if GCP free tier limit exceeded
   --no-translate                  Skip translation, only convert to Unicode
   --use-ocr                       Use OCR instead of font-based extraction
   --ocr-lang TEXT                 OCR language code (default: mar)
   --ocr-dpi INTEGER               OCR rendering DPI (default: 300)
+  --structure-preserving          Preserve original text positions in PDF output
   -q, --quiet                     Suppress progress output
 ```
 
@@ -224,6 +227,28 @@ Options:
   -s, --search TEXT      Search for encoding by name
 ```
 
+### `usage`
+Show API usage statistics for translation services
+
+```bash
+uv run legacylipi usage [OPTIONS]
+
+Options:
+  --service TEXT         Service to check usage for (default: gcp_translate)
+```
+
+**Examples:**
+```bash
+# Check current GCP Cloud Translation usage
+uv run legacylipi usage
+
+# Check GCP usage explicitly
+uv run legacylipi usage --service gcp_translate
+```
+
+**Output:**
+Shows the current month, characters used, free tier limit, remaining quota, and usage percentage.
+
 ## Supported Encodings
 
 | Encoding | Font Family | Language | Status |
@@ -245,6 +270,7 @@ Options:
 | `mymemory` | MyMemory API (free) | Works out of the box | 500 char limit per request |
 | `ollama` | Local LLM via Ollama | Requires [Ollama](https://ollama.ai) running locally | No limits (local) |
 | `openai` | OpenAI GPT models | Set `OPENAI_API_KEY` environment variable | API rate limits apply |
+| `gcp_cloud` | Google Cloud Translation API | Enable API, set credentials, set `GCP_PROJECT_ID` | 500K chars/month free |
 | `mock` | Mock translator for testing | Always available | N/A |
 
 ### Using translate-shell (Recommended)
@@ -312,6 +338,52 @@ uv run legacylipi translate tests/data/input.pdf --translator openai --model gpt
 - `gpt-4o` - Most capable, best for complex translations
 - `gpt-3.5-turbo` - Faster, lower cost
 
+### Using Google Cloud Translation
+
+Use Google Cloud Translation API for production-grade translation with a free tier:
+
+**Setup:**
+1. Create a GCP project at [console.cloud.google.com](https://console.cloud.google.com)
+2. Enable Cloud Translation API
+3. Create a service account and download the JSON key
+4. Set the credentials:
+   ```bash
+   export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account-key.json"
+   ```
+5. Set your GCP project ID:
+   ```bash
+   export GCP_PROJECT_ID="your-project-id"
+   ```
+
+**Usage:**
+
+```bash
+# Use GCP Cloud Translation (project ID from env var)
+uv run legacylipi translate tests/data/input.pdf --translator gcp_cloud
+
+# With explicit project ID
+uv run legacylipi translate tests/data/input.pdf --translator gcp_cloud --gcp-project my-project-id
+
+# Force translation even if free tier limit would be exceeded
+uv run legacylipi translate tests/data/input.pdf --translator gcp_cloud --force-translate
+```
+
+**Free Tier:**
+- 500,000 characters per month free
+- Monthly limit resets on the 1st of each month
+- Charges apply after limit is exceeded (unless `--force-translate` is used, which checks the limit)
+
+**Check usage:**
+```bash
+# View current monthly usage
+uv run legacylipi usage --service gcp_translate
+```
+
+**Understanding `--force-translate`:**
+- Without `--force-translate`: Translation will fail if it would exceed the free tier limit
+- With `--force-translate`: Translation proceeds regardless of limit (charges may apply)
+- The `usage` command always shows your current monthly character count
+
 ## OCR Support
 
 LegacyLipi supports OCR-based text extraction using Tesseract OCR. This is useful when:
@@ -340,6 +412,42 @@ LegacyLipi supports OCR-based text extraction using Tesseract OCR. This is usefu
 2. **Pre-process images**: Clean, high-contrast scans work best
 3. **Language matters**: Always specify the correct `--ocr-lang` for best results
 4. **Combine with translation**: OCR extracts original text, then translate as usual
+
+---
+
+## Web UI
+
+LegacyLipi includes a web interface built with NiceGUI for easy PDF translation without command-line usage.
+
+### Running the Web UI
+
+```bash
+# Start the web server
+uv run legacylipi-ui
+
+# Or alternatively
+uv run python -m legacylipi.ui.app
+```
+
+The web interface will be available at **http://localhost:8080**
+
+### Features
+
+- **File Upload**: Drag-and-drop or click to upload PDF files
+- **Translator Selection**: Choose from all available backends (Google, OpenAI, GCP, Ollama, etc.)
+- **OCR Support**: Enable OCR for scanned documents with language selection
+- **Translation Mode**: Select between flowing text or structure-preserving layout
+- **Output Format**: Choose output as PDF, text, or Markdown
+- **Progress Tracking**: Real-time progress updates during translation
+- **Download Results**: Download translated files directly from the browser
+
+### Example Workflow
+
+1. Navigate to http://localhost:8080
+2. Upload your PDF with legacy fonts
+3. Select your translator backend and configure options
+4. Click "Translate"
+5. Download the resulting file
 
 ---
 
@@ -405,10 +513,14 @@ src/legacylipi/
 │   ├── ocr_parser.py        # OCR-based PDF text extraction (Tesseract)
 │   ├── encoding_detector.py # Legacy font detection
 │   ├── unicode_converter.py # Legacy-to-Unicode conversion
-│   ├── translator.py        # Translation backends (Google, trans, MyMemory, Ollama, OpenAI)
-│   └── output_generator.py  # Text/Markdown/PDF output generation
+│   ├── translator.py        # Translation backends (Google, trans, MyMemory, Ollama, OpenAI, GCP)
+│   ├── output_generator.py  # Text/Markdown/PDF output generation
+│   └── utils/
+│       └── usage_tracker.py # API usage tracking with monthly limits
 ├── mappings/
 │   └── loader.py            # Font mapping tables
+├── ui/
+│   └── app.py               # NiceGUI web interface
 └── utils/                   # Utility functions
 
 tests/
@@ -514,13 +626,13 @@ uv sync
 │  └──────────────┘    └──────────────┘                                   │
 │                             │                                            │
 │                             ▼                                            │
-│         ┌───────────────────────────────────────────────────────┐       │
-│         │                 Translation Engine                      │       │
-│         │  ┌────────┬────────┬──────────┬────────┬────────┬────┐ │       │
-│         │  │ trans  │ Google │ MyMemory │ Ollama │ OpenAI │Mock│ │       │
-│         │  │ (CLI)  │ Trans. │  (API)   │(Local) │ (API)  │    │ │       │
-│         │  └────────┴────────┴──────────┴────────┴────────┴────┘ │       │
-│         └───────────────────────────────────────────────────────┘       │
+│         ┌───────────────────────────────────────────────────────────┐       │
+│         │                 Translation Engine                          │       │
+│         │  ┌────────┬────────┬──────────┬────────┬────────┬─────┬────┐ │       │
+│         │  │ trans  │ Google │ MyMemory │ Ollama │ OpenAI │ GCP │Mock│ │       │
+│         │  │ (CLI)  │ Trans. │  (API)   │(Local) │ (API)  │Cloud│    │ │       │
+│         │  └────────┴────────┴──────────┴────────┴────────┴─────┴────┘ │       │
+│         └───────────────────────────────────────────────────────────┘       │
 │                             │                                            │
 │                             ▼                                            │
 │         ┌───────────────────────────────────────────────┐               │

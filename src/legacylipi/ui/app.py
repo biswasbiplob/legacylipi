@@ -44,9 +44,10 @@ OUTPUT_FORMATS = {
 }
 
 TRANSLATORS = {
+    "trans": "Translate-Shell (CLI) - Recommended",
+    "gcp_cloud": "Google Cloud Translation (500K free/month)",
     "google": "Google Translate (Free)",
     "mymemory": "MyMemory (Free)",
-    "trans": "Translate-Shell (CLI)",
     "ollama": "Ollama (Local LLM)",
     "openai": "OpenAI (API Key Required)",
 }
@@ -76,13 +77,14 @@ class TranslationUI:
         self.use_ocr = False
         self.ocr_lang = "mar"
         self.ocr_dpi = 300
-        self.translator = "google"
+        self.translator = "trans"
         self.translation_mode = "structure_preserving"  # Default to structure-preserving
         self.openai_key = ""
         self.openai_model = "gpt-4o-mini"
         self.ollama_model = "llama3.2"
         self.ollama_host = "http://localhost:11434"
         self.trans_path = ""
+        self.gcp_project = ""
 
         # UI elements
         self.progress_bar = None
@@ -299,6 +301,17 @@ class TranslationUI:
                     on_change=lambda e: setattr(self, "trans_path", e.value),
                 ).classes("w-full")
 
+            elif self.translator == "gcp_cloud":
+                ui.input(
+                    label="GCP Project ID",
+                    value=self.gcp_project,
+                    placeholder="my-gcp-project-id",
+                    on_change=lambda e: setattr(self, "gcp_project", e.value),
+                ).classes("w-full")
+                ui.label(
+                    "Free tier: 500,000 chars/month. Requires GOOGLE_APPLICATION_CREDENTIALS."
+                ).classes("text-xs text-gray-500")
+
             elif self.translator in ("google", "mymemory"):
                 ui.label("No additional configuration required.").classes("text-gray-500 text-sm")
 
@@ -336,6 +349,13 @@ class TranslationUI:
             ui.notify("Please enter your OpenAI API key.", type="warning")
             return
 
+        if self.translator == "gcp_cloud" and not self.gcp_project:
+            # Try to get from environment
+            import os
+            if not os.environ.get("GCP_PROJECT_ID"):
+                ui.notify("Please enter your GCP Project ID.", type="warning")
+                return
+
         self.is_translating = True
         self.translate_button.disable()
         self.idle_container.set_visibility(False)
@@ -347,7 +367,7 @@ class TranslationUI:
             from legacylipi.core.models import DetectionMethod, EncodingDetectionResult, OutputFormat
             from legacylipi.core.output_generator import OutputGenerator
             from legacylipi.core.pdf_parser import parse_pdf
-            from legacylipi.core.translator import create_translator
+            from legacylipi.core.translator import create_translator, UsageLimitExceededError
             from legacylipi.core.unicode_converter import UnicodeConverter
 
             # Create temp file for input
@@ -422,6 +442,11 @@ class TranslationUI:
                         translator_kwargs["host"] = self.ollama_host
                 elif self.translator == "trans" and self.trans_path:
                     translator_kwargs["trans_path"] = self.trans_path
+                elif self.translator == "gcp_cloud":
+                    import os
+                    project_id = self.gcp_project or os.environ.get("GCP_PROJECT_ID")
+                    if project_id:
+                        translator_kwargs["project_id"] = project_id
 
                 engine = create_translator(self.translator, **translator_kwargs)
 
@@ -465,6 +490,14 @@ class TranslationUI:
                             translated_count = sum(1 for b in all_blocks if b.translated_text and b.translated_text != (b.unicode_text or b.raw_text))
                             if translated_count == 0:
                                 ui.notify("Warning: No blocks were translated. Check API key and model.", type="warning")
+                        except UsageLimitExceededError as e:
+                            ui.notify(
+                                f"GCP free tier limit exceeded: {e.current_usage:,}/{e.limit:,} chars. "
+                                f"Need {e.requested:,} more. Try a different translator.",
+                                type="warning",
+                                timeout=10000,
+                            )
+                            raise
                         except Exception as e:
                             ui.notify(f"Translation error: {e}", type="negative")
                             raise
@@ -488,6 +521,14 @@ class TranslationUI:
                         )
                         if not translation_result or not translation_result.translated_text:
                             ui.notify("Warning: Translation returned empty result. Check API key and model.", type="warning")
+                    except UsageLimitExceededError as e:
+                        ui.notify(
+                            f"GCP free tier limit exceeded: {e.current_usage:,}/{e.limit:,} chars. "
+                            f"Need {e.requested:,} more. Try a different translator.",
+                            type="warning",
+                            timeout=10000,
+                        )
+                        raise
                     except Exception as e:
                         ui.notify(f"Translation error: {e}", type="negative")
                         raise

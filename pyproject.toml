@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "legacylipi"
-version = "0.1.0"
+version = "0.2.0"
 description = "Legacy Font PDF Translator - Translate PDFs with legacy Indian font encodings to English"
 readme = "README.md"
 license = "MIT"
@@ -33,6 +33,7 @@ dependencies = [
     "deep-translator>=1.11.4",
     "pytesseract>=0.3.13",
     "pillow>=12.1.0",
+    "nicegui>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -48,9 +49,6 @@ ollama = [
 ]
 google = [
     "google-cloud-translate>=3.12.0",
-]
-ui = [
-    "nicegui>=2.0.0",
 ]
 
 [project.scripts]

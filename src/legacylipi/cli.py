@@ -25,7 +25,7 @@ from legacylipi.core.ocr_parser import (
 )
 from legacylipi.core.output_generator import OutputGenerator
 from legacylipi.core.pdf_parser import PDFParseError, parse_pdf
-from legacylipi.core.translator import TranslationEngine, TranslationError, create_translator
+from legacylipi.core.translator import TranslationEngine, TranslationError, UsageLimitExceededError, create_translator
 from legacylipi.core.unicode_converter import UnicodeConverter
 from legacylipi.mappings.loader import MappingLoader
 
@@ -92,9 +92,9 @@ def main():
 )
 @click.option(
     "--translator",
-    type=click.Choice(["mock", "google", "trans", "mymemory", "ollama", "openai"]),
+    type=click.Choice(["mock", "google", "trans", "mymemory", "ollama", "openai", "gcp_cloud"]),
     default="google",
-    help="Translation backend: google, trans, mymemory, ollama (local LLM), openai (requires OPENAI_API_KEY).",
+    help="Translation backend: google, trans, mymemory, ollama, openai, gcp_cloud (requires GCP project).",
 )
 @click.option(
     "--model",
@@ -107,6 +107,18 @@ def main():
     type=str,
     default=None,
     help="Path to trans executable (for --translator trans). Default: searches PATH and ./trans",
+)
+@click.option(
+    "--gcp-project",
+    type=str,
+    envvar="GCP_PROJECT_ID",
+    default=None,
+    help="GCP project ID for Cloud Translation API. Can also set GCP_PROJECT_ID env var.",
+)
+@click.option(
+    "--force-translate",
+    is_flag=True,
+    help="Continue translation even if GCP free tier limit would be exceeded.",
 )
 @click.option(
     "--no-translate",
@@ -149,6 +161,8 @@ def translate(
     translator: str,
     model: Optional[str],
     trans_path: Optional[str],
+    gcp_project: Optional[str],
+    force_translate: bool,
     no_translate: bool,
     use_ocr: bool,
     ocr_lang: str,
@@ -280,6 +294,12 @@ def translate(
                     translator_kwargs["model"] = model
                 if trans_path and translator == "trans":
                     translator_kwargs["trans_path"] = trans_path
+                if translator == "gcp_cloud":
+                    if not gcp_project:
+                        print_error("GCP project ID required for gcp_cloud translator. Use --gcp-project or set GCP_PROJECT_ID.")
+                        sys.exit(1)
+                    translator_kwargs["project_id"] = gcp_project
+                    translator_kwargs["enforce_free_tier"] = not force_translate
 
                 engine = create_translator(translator, **translator_kwargs)
 
@@ -370,6 +390,14 @@ def translate(
         console.print("  • Try [cyan]--translator ollama[/cyan] for local LLM translation")
         console.print("  • Try [cyan]--translator mymemory[/cyan] for free MyMemory API")
         console.print("  • Try [cyan]--no-translate[/cyan] to skip translation and output Unicode only")
+        sys.exit(1)
+    except UsageLimitExceededError as e:
+        print_warning(f"GCP free tier limit: {e.current_usage:,}/{e.limit:,} characters used this month.")
+        print_warning(f"This translation requires {e.requested:,} more characters.")
+        console.print("\n[dim]Options:[/dim]")
+        console.print("  • Use [cyan]--force-translate[/cyan] to proceed (charges may apply)")
+        console.print("  • Try [cyan]--translator google[/cyan] for free Google Translate")
+        console.print("  • Try [cyan]--translator ollama[/cyan] for local LLM translation")
         sys.exit(1)
     except Exception as e:
         # Handle tenacity retry errors that wrap TranslationError
@@ -810,6 +838,43 @@ def list_encodings(search: Optional[str]):
     console.print(table)
 
     console.print("\n[dim]Use --encoding <name> with translate/convert commands[/dim]")
+
+
+@main.command()
+@click.option(
+    "--service",
+    type=str,
+    default="gcp_translate",
+    help="Service to check usage for (default: gcp_translate).",
+)
+def usage(service: str):
+    """Show current API usage statistics.
+
+    Displays monthly character usage for translation services.
+    """
+    print_banner()
+
+    from legacylipi.core.utils.usage_tracker import UsageTracker
+
+    tracker = UsageTracker()
+    summary = tracker.get_usage_summary(service)
+
+    console.print(f"\n[bold]📊 Usage Statistics for {service}:[/bold]\n")
+    console.print(f"   Month: {summary['month']}")
+    console.print(f"   Characters used: {summary['characters']:,}")
+
+    if service == "gcp_translate":
+        limit = 500_000
+        remaining = limit - summary['characters']
+        pct = (summary['characters'] / limit) * 100
+
+        color = "green" if pct < 80 else "yellow" if pct < 100 else "red"
+        console.print(f"   Free tier limit: {limit:,}")
+        console.print(f"   Remaining: [{color}]{remaining:,}[/]")
+        console.print(f"   Usage: [{color}]{pct:.1f}%[/]")
+
+    if summary.get('last_updated'):
+        console.print(f"   Last updated: {summary['last_updated']}")
 
 
 if __name__ == "__main__":
