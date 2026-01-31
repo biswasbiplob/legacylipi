@@ -1,11 +1,14 @@
 # Product Requirements Document (PRD)
 
+> **Note:** This is an internal planning document from the initial project design phase.
+> Current implementation may differ. See [README](../../README.md) for current features.
+
 # LegacyLipi: Legacy Font PDF Translator
 
-**Version:** 1.0
+**Version:** 1.0 (Planning)
 **Date:** January 7, 2026
 **Author:** Biplob Biswas
-**Status:** Draft
+**Status:** Historical Planning Document
 
 ---
 
@@ -705,7 +708,7 @@ Suggestions:
   3. If you know the font family, search:
      legacylipi encodings search "font name"
 
-Need help? File an issue: https://github.com/user/legacylipi/issues
+Need help? File an issue: https://github.com/biswasbiplob/legacylipi/issues
 ```
 
 ---

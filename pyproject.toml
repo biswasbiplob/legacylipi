@@ -56,10 +56,10 @@ legacylipi = "legacylipi.cli:main"
 legacylipi-ui = "legacylipi.ui.app:main"
 
 [project.urls]
-Homepage = "https://github.com/user/legacylipi"
-Documentation = "https://github.com/user/legacylipi#readme"
-Repository = "https://github.com/user/legacylipi"
-Issues = "https://github.com/user/legacylipi/issues"
+Homepage = "https://github.com/biswasbiplob/legacylipi"
+Documentation = "https://github.com/biswasbiplob/legacylipi#readme"
+Repository = "https://github.com/biswasbiplob/legacylipi"
+Issues = "https://github.com/biswasbiplob/legacylipi/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/legacylipi"]
