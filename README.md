@@ -24,8 +24,8 @@ LegacyLipi:
 
 ```bash
 # Clone and install
-git clone https://github.com/biswasbiplob/context-engineered-tools.git
-cd context-engineered-tools
+git clone https://github.com/biswasbiplob/legacylipi.git
+cd legacylipi
 uv sync
 
 # With all optional backends

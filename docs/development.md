@@ -11,8 +11,8 @@ Guide for contributing to LegacyLipi development.
 
 ```bash
 # Clone the repository
-git clone https://github.com/biswasbiplob/context-engineered-tools.git
-cd context-engineered-tools
+git clone https://github.com/biswasbiplob/legacylipi.git
+cd legacylipi
 
 # Install all dependencies (including dev)
 uv sync --all-extras
