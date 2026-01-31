@@ -135,6 +135,11 @@ def main():
     is_flag=True,
     help="Suppress progress output.",
 )
+@click.option(
+    "--structure-preserving",
+    is_flag=True,
+    help="Preserve original text positions in PDF output (requires OCR mode and PDF format).",
+)
 def translate(
     input_file: Path,
     output: Optional[Path],
@@ -149,6 +154,7 @@ def translate(
     ocr_lang: str,
     ocr_dpi: int,
     quiet: bool,
+    structure_preserving: bool,
 ):
     """Translate a PDF with legacy fonts to Unicode/English.
 

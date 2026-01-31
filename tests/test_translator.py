@@ -14,6 +14,11 @@ from legacylipi.core.translator import (
     TranslationError,
     create_translator,
 )
+from legacylipi.core.utils.language_codes import (
+    get_google_code,
+    get_mymemory_code,
+    get_language_name,
+)
 
 
 class TestTranslationConfig:
@@ -25,8 +30,8 @@ class TestTranslationConfig:
 
         assert config.source_language == "mr"
         assert config.target_language == "en"
-        assert config.chunk_size == 4000
-        assert config.timeout == 30.0
+        assert config.chunk_size == 2000  # Updated default
+        assert config.timeout == 60.0  # Updated default
 
     def test_custom_config(self):
         """Test custom configuration."""
@@ -77,14 +82,13 @@ class TestGoogleTranslateBackend:
         assert backend.backend_type == TranslationBackend.GOOGLE
 
     def test_language_code_mapping(self):
-        """Test language code mapping."""
-        backend = GoogleTranslateBackend()
-
-        assert backend._map_language_code("marathi") == "mr"
-        assert backend._map_language_code("hindi") == "hi"
-        assert backend._map_language_code("english") == "en"
-        assert backend._map_language_code("MR") == "mr"
-        assert backend._map_language_code("unknown") == "unknown"
+        """Test language code mapping using utility function."""
+        # Test the utility function that backend uses
+        assert get_google_code("marathi") == "mr"
+        assert get_google_code("hindi") == "hi"
+        assert get_google_code("english") == "en"
+        assert get_google_code("MR") == "mr"
+        assert get_google_code("unknown") == "unknown"
 
     @pytest.mark.asyncio
     async def test_translate_empty_text(self):
@@ -120,13 +124,12 @@ class TestOllamaTranslationBackend:
         assert backend._model == "mistral"
 
     def test_language_name(self):
-        """Test language name lookup."""
-        backend = OllamaTranslationBackend()
-
-        assert backend._language_name("mr") == "Marathi"
-        assert backend._language_name("hi") == "Hindi"
-        assert backend._language_name("en") == "English"
-        assert backend._language_name("unknown") == "unknown"
+        """Test language name lookup using utility function."""
+        # Test the utility function that backend uses
+        assert get_language_name("mr") == "Marathi"
+        assert get_language_name("hi") == "Hindi"
+        assert get_language_name("en") == "English"
+        assert get_language_name("unknown") == "unknown"
 
     def test_prompt_building(self):
         """Test translation prompt construction."""
@@ -149,14 +152,12 @@ class TestMyMemoryTranslationBackend:
         assert backend.backend_type == TranslationBackend.MYMEMORY
 
     def test_language_code_mapping(self):
-        """Test language code mapping."""
-        from legacylipi.core.translator import MyMemoryTranslationBackend
-        backend = MyMemoryTranslationBackend()
-
-        assert backend._map_language_code("mr") == "mr-IN"
-        assert backend._map_language_code("en") == "en-GB"
-        assert backend._map_language_code("hi") == "hi-IN"
-        assert backend._map_language_code("unknown") == "unknown"
+        """Test language code mapping using utility function."""
+        # Test the utility function that backend uses
+        assert get_mymemory_code("mr") == "mr-IN"
+        assert get_mymemory_code("en") == "en-GB"
+        assert get_mymemory_code("hi") == "hi-IN"
+        assert get_mymemory_code("unknown") == "unknown"
 
     @pytest.mark.asyncio
     async def test_translate_empty_text(self):
@@ -458,14 +459,12 @@ class TestOpenAITranslationBackend:
         assert backend._model == "gpt-4o"
 
     def test_language_name(self):
-        """Test language name lookup."""
-        from legacylipi.core.translator import OpenAITranslationBackend
-        backend = OpenAITranslationBackend(api_key="test-key")
-
-        assert backend._language_name("mr") == "Marathi"
-        assert backend._language_name("hi") == "Hindi"
-        assert backend._language_name("en") == "English"
-        assert backend._language_name("unknown") == "unknown"
+        """Test language name lookup using utility function."""
+        # Test the utility function that backend uses
+        assert get_language_name("mr") == "Marathi"
+        assert get_language_name("hi") == "Hindi"
+        assert get_language_name("en") == "English"
+        assert get_language_name("unknown") == "unknown"
 
     def test_missing_api_key_raises_error(self):
         """Test that missing API key raises TranslationError."""

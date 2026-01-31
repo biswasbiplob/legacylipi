@@ -14,6 +14,13 @@ import httpx
 from typing import Callable
 
 from legacylipi.core.models import TextBlock, TranslationBackend, TranslationResult
+from legacylipi.core.utils.rate_limiter import RateLimiter
+from legacylipi.core.utils.language_codes import (
+    get_language_name,
+    get_google_code,
+    get_mymemory_code,
+    LANGUAGE_NAMES,
+)
 
 
 class TranslationError(Exception):
@@ -65,6 +72,33 @@ class TranslationBackendBase(ABC):
         pass
 
 
+class BaseHTTPTranslationBackend(TranslationBackendBase):
+    """Base class for HTTP-based translation backends with shared client management."""
+
+    def __init__(self, timeout: float = 30.0, delay_between_requests: float = 1.0):
+        """Initialize HTTP backend.
+
+        Args:
+            timeout: Request timeout in seconds.
+            delay_between_requests: Base delay between API calls.
+        """
+        self._timeout = timeout
+        self._client: httpx.AsyncClient | None = None
+        self._rate_limiter = RateLimiter(base_delay=delay_between_requests)
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        """Get or create HTTP client."""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=self._timeout)
+        return self._client
+
+    async def close(self) -> None:
+        """Close the HTTP client."""
+        if self._client:
+            await self._client.aclose()
+            self._client = None
+
+
 class MockTranslationBackend(TranslationBackendBase):
     """Mock translation backend for testing."""
 
@@ -92,7 +126,7 @@ class MockTranslationBackend(TranslationBackendBase):
         return f"{self._prefix}{text}"
 
 
-class GoogleTranslateBackend(TranslationBackendBase):
+class GoogleTranslateBackend(BaseHTTPTranslationBackend):
     """Google Translate backend using free web API."""
 
     # Note: This uses the free Google Translate web API
@@ -119,10 +153,7 @@ class GoogleTranslateBackend(TranslationBackendBase):
         """
         import random
 
-        self._timeout = timeout
-        self._base_delay = delay_between_requests
-        self._client: httpx.AsyncClient | None = None
-        self._last_request_time: float = 0
+        super().__init__(timeout=timeout, delay_between_requests=delay_between_requests)
         self._request_count = 0
         self._random = random.Random()
 
@@ -155,29 +186,6 @@ class GoogleTranslateBackend(TranslationBackendBase):
         )
         return self._client
 
-    async def _rate_limit(self) -> None:
-        """Apply rate limiting with random jitter between requests."""
-        import time
-
-        now = time.time()
-        elapsed = now - self._last_request_time
-
-        # Add random jitter (0.5 to 2x base delay) to appear more human-like
-        jitter = self._random.uniform(0.5, 2.0)
-        delay = self._base_delay * jitter
-
-        # Increase delay after many requests
-        if self._request_count > 5:
-            delay *= 1.5
-        if self._request_count > 10:
-            delay *= 2.0
-
-        if elapsed < delay:
-            await asyncio.sleep(delay - elapsed)
-
-        self._last_request_time = time.time()
-        self._request_count += 1
-
     async def translate(
         self,
         text: str,
@@ -189,8 +197,8 @@ class GoogleTranslateBackend(TranslationBackendBase):
             return text
 
         # Map language codes
-        source = self._map_language_code(source_lang)
-        target = self._map_language_code(target_lang)
+        source = get_google_code(source_lang)
+        target = get_google_code(target_lang)
 
         # Truncate text if too long for single request (max ~5000 chars)
         max_chars = 4500
@@ -203,8 +211,9 @@ class GoogleTranslateBackend(TranslationBackendBase):
 
         for attempt in range(max_retries):
             try:
-                # Apply rate limiting
-                await self._rate_limit()
+                # Apply rate limiting with enhanced backoff for Google
+                await self._rate_limiter.wait_with_backoff(self._request_count, factor=1.5)
+                self._request_count += 1
 
                 # Get fresh client with new user agent for each attempt
                 client = await self._get_client()
@@ -269,41 +278,11 @@ class GoogleTranslateBackend(TranslationBackendBase):
         # Should not reach here, but just in case
         raise TranslationError(f"Translation failed after {max_retries} attempts: {last_error}")
 
-    def _map_language_code(self, code: str) -> str:
-        """Map common language codes to Google Translate codes."""
-        mappings = {
-            "marathi": "mr",
-            "hindi": "hi",
-            "english": "en",
-            "auto": "auto",
-        }
-        return mappings.get(code.lower(), code.lower())
 
-    async def close(self) -> None:
-        """Close the HTTP client."""
-        if self._client:
-            await self._client.aclose()
-            self._client = None
-
-
-class MyMemoryTranslationBackend(TranslationBackendBase):
+class MyMemoryTranslationBackend(BaseHTTPTranslationBackend):
     """MyMemory translation backend - free, no API key required."""
 
     BASE_URL = "https://api.mymemory.translated.net/get"
-
-    # Language code mappings for MyMemory (uses BCP-47 codes)
-    LANGUAGE_CODES = {
-        "mr": "mr-IN",
-        "hi": "hi-IN",
-        "en": "en-GB",
-        "ta": "ta-IN",
-        "te": "te-IN",
-        "kn": "kn-IN",
-        "ml": "ml-IN",
-        "gu": "gu-IN",
-        "bn": "bn-IN",
-        "pa": "pa-IN",
-    }
 
     def __init__(self, timeout: float = 30.0, delay_between_requests: float = 1.0):
         """Initialize MyMemory backend.
@@ -312,35 +291,11 @@ class MyMemoryTranslationBackend(TranslationBackendBase):
             timeout: Request timeout in seconds.
             delay_between_requests: Delay between API calls.
         """
-        self._timeout = timeout
-        self._delay = delay_between_requests
-        self._client: httpx.AsyncClient | None = None
-        self._last_request_time: float = 0
+        super().__init__(timeout=timeout, delay_between_requests=delay_between_requests)
 
     @property
     def backend_type(self) -> TranslationBackend:
         return TranslationBackend.MYMEMORY
-
-    async def _get_client(self) -> httpx.AsyncClient:
-        """Get or create HTTP client."""
-        if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(timeout=self._timeout)
-        return self._client
-
-    async def _rate_limit(self) -> None:
-        """Apply rate limiting between requests."""
-        import time
-
-        now = time.time()
-        elapsed = now - self._last_request_time
-        if elapsed < self._delay:
-            await asyncio.sleep(self._delay - elapsed)
-        self._last_request_time = time.time()
-
-    def _map_language_code(self, code: str) -> str:
-        """Map language codes to MyMemory BCP-47 format."""
-        code_lower = code.lower()
-        return self.LANGUAGE_CODES.get(code_lower, code_lower)
 
     async def translate(
         self,
@@ -352,12 +307,12 @@ class MyMemoryTranslationBackend(TranslationBackendBase):
         if not text.strip():
             return text
 
-        await self._rate_limit()
+        await self._rate_limiter.wait()
         client = await self._get_client()
 
         # Map language codes
-        source = self._map_language_code(source_lang)
-        target = self._map_language_code(target_lang)
+        source = get_mymemory_code(source_lang)
+        target = get_mymemory_code(target_lang)
 
         # MyMemory has a 500 char limit per request for free tier
         max_chars = 500
@@ -366,7 +321,7 @@ class MyMemoryTranslationBackend(TranslationBackendBase):
             chunks = [text[i : i + max_chars] for i in range(0, len(text), max_chars)]
             results = []
             for chunk in chunks:
-                await self._rate_limit()
+                await self._rate_limiter.wait()
                 result = await self._translate_chunk(client, chunk, source, target)
                 results.append(result)
             return "".join(results)
@@ -400,12 +355,6 @@ class MyMemoryTranslationBackend(TranslationBackendBase):
 
         except httpx.HTTPError as e:
             raise TranslationError(f"HTTP error during MyMemory translation: {e}")
-
-    async def close(self) -> None:
-        """Close the HTTP client."""
-        if self._client:
-            await self._client.aclose()
-            self._client = None
 
 
 class TranslateShellBackend(TranslationBackendBase):
@@ -618,7 +567,7 @@ class TranslateShellBackend(TranslationBackendBase):
         pass
 
 
-class OllamaTranslationBackend(TranslationBackendBase):
+class OllamaTranslationBackend(BaseHTTPTranslationBackend):
     """Local LLM translation backend using Ollama."""
 
     DEFAULT_MODEL = "llama3.2"
@@ -637,20 +586,13 @@ class OllamaTranslationBackend(TranslationBackendBase):
             host: Ollama server host.
             timeout: Request timeout in seconds.
         """
+        super().__init__(timeout=timeout, delay_between_requests=0.0)
         self._model = model
         self._host = host.rstrip("/")
-        self._timeout = timeout
-        self._client: httpx.AsyncClient | None = None
 
     @property
     def backend_type(self) -> TranslationBackend:
         return TranslationBackend.OLLAMA
-
-    async def _get_client(self) -> httpx.AsyncClient:
-        """Get or create HTTP client."""
-        if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(timeout=self._timeout)
-        return self._client
 
     async def translate(
         self,
@@ -696,8 +638,8 @@ class OllamaTranslationBackend(TranslationBackendBase):
 
     def _build_prompt(self, text: str, source_lang: str, target_lang: str) -> str:
         """Build translation prompt for the LLM."""
-        source_name = self._language_name(source_lang)
-        target_name = self._language_name(target_lang)
+        source_name = get_language_name(source_lang)
+        target_name = get_language_name(target_lang)
 
         return f"""Translate the following {source_name} text to {target_name}.
 Only provide the translation, no explanations or additional text.
@@ -707,30 +649,8 @@ Text to translate:
 
 Translation:"""
 
-    def _language_name(self, code: str) -> str:
-        """Get full language name from code."""
-        names = {
-            "mr": "Marathi",
-            "hi": "Hindi",
-            "en": "English",
-            "ta": "Tamil",
-            "te": "Telugu",
-            "kn": "Kannada",
-            "ml": "Malayalam",
-            "gu": "Gujarati",
-            "bn": "Bengali",
-            "pa": "Punjabi",
-        }
-        return names.get(code.lower(), code)
 
-    async def close(self) -> None:
-        """Close the HTTP client."""
-        if self._client:
-            await self._client.aclose()
-            self._client = None
-
-
-class OpenAITranslationBackend(TranslationBackendBase):
+class OpenAITranslationBackend(BaseHTTPTranslationBackend):
     """OpenAI API translation backend using GPT models."""
 
     DEFAULT_MODEL = "gpt-4o-mini"
@@ -753,11 +673,10 @@ class OpenAITranslationBackend(TranslationBackendBase):
         """
         import os
 
+        super().__init__(timeout=timeout, delay_between_requests=0.0)
         self._model = model
         self._api_key = api_key or os.environ.get("OPENAI_API_KEY")
-        self._timeout = timeout
         self._temperature = temperature
-        self._client: httpx.AsyncClient | None = None
 
         if not self._api_key:
             raise TranslationError(
@@ -768,12 +687,6 @@ class OpenAITranslationBackend(TranslationBackendBase):
     @property
     def backend_type(self) -> TranslationBackend:
         return TranslationBackend.OPENAI
-
-    async def _get_client(self) -> httpx.AsyncClient:
-        """Get or create HTTP client."""
-        if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(timeout=self._timeout)
-        return self._client
 
     async def translate(
         self,
@@ -788,8 +701,8 @@ class OpenAITranslationBackend(TranslationBackendBase):
         client = await self._get_client()
 
         # Build translation messages
-        source_name = self._language_name(source_lang)
-        target_name = self._language_name(target_lang)
+        source_name = get_language_name(source_lang)
+        target_name = get_language_name(target_lang)
 
         system_prompt = (
             f"You are a professional translator specializing in {source_name} to {target_name} translation. "
@@ -850,46 +763,12 @@ class OpenAITranslationBackend(TranslationBackendBase):
         except httpx.HTTPError as e:
             raise TranslationError(f"HTTP error during OpenAI translation: {e}")
 
-    def _language_name(self, code: str) -> str:
-        """Get full language name from code."""
-        names = {
-            "mr": "Marathi",
-            "hi": "Hindi",
-            "en": "English",
-            "ta": "Tamil",
-            "te": "Telugu",
-            "kn": "Kannada",
-            "ml": "Malayalam",
-            "gu": "Gujarati",
-            "bn": "Bengali",
-            "pa": "Punjabi",
-        }
-        return names.get(code.lower(), code)
-
-    async def close(self) -> None:
-        """Close the HTTP client."""
-        if self._client:
-            await self._client.aclose()
-            self._client = None
-
 
 class TranslationEngine:
     """Main translation engine with chunking and backend management."""
 
-    # Language code to full name mapping
-    LANGUAGE_NAMES = {
-        "mr": "Marathi",
-        "hi": "Hindi",
-        "en": "English",
-        "ta": "Tamil",
-        "te": "Telugu",
-        "kn": "Kannada",
-        "ml": "Malayalam",
-        "gu": "Gujarati",
-        "bn": "Bengali",
-        "pa": "Punjabi",
-        "auto": "Auto-detect",
-    }
+    # Language code to full name mapping (imported from utils)
+    LANGUAGE_NAMES = LANGUAGE_NAMES
 
     def __init__(
         self,

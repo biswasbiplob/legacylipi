@@ -11,6 +11,7 @@ from typing import Optional, Union
 
 import fitz  # PyMuPDF
 
+from legacylipi.core.font_analyzer import FontSizeAnalyzer
 from legacylipi.core.models import (
     EncodingDetectionResult,
     OutputFormat,
@@ -18,149 +19,7 @@ from legacylipi.core.models import (
     TextBlock,
     TranslationResult,
 )
-
-
-class FontSizeAnalyzer:
-    """Analyze font sizes across document and normalize for consistency.
-
-    This class analyzes all text blocks in a document, infers font sizes from
-    bounding box dimensions (for OCR where no font info is available), clusters
-    them into categories (heading/body/caption), and provides normalized output
-    sizes to preserve visual hierarchy while maintaining consistency.
-    """
-
-    CATEGORY_HEADING = "heading"
-    CATEGORY_BODY = "body"
-    CATEGORY_CAPTION = "caption"
-
-    # Normalized output sizes for each category
-    # For now, use SINGLE consistent size for all text to ensure uniformity
-    # TODO: Implement smarter heading detection using text length, position, etc.
-    UNIFORM_SIZE = 11.0  # Single consistent size for all text
-    OUTPUT_SIZES = {
-        CATEGORY_HEADING: 11.0,  # Same as body for consistency
-        CATEGORY_BODY: 11.0,
-        CATEGORY_CAPTION: 11.0,  # Same as body for consistency
-    }
-
-    # Percentile thresholds for categorization
-    HEADING_PERCENTILE = 85  # Top 15% are headings
-    CAPTION_PERCENTILE = 15  # Bottom 15% are captions
-
-    def __init__(self):
-        """Initialize the analyzer."""
-        self._block_sizes: dict[int, float] = {}  # block id -> inferred size
-        self._block_categories: dict[int, str] = {}  # block id -> category
-        self._analyzed = False
-
-    def analyze_blocks(self, blocks: list[TextBlock]) -> None:
-        """Analyze all blocks to determine font categories.
-
-        Args:
-            blocks: List of TextBlock objects to analyze.
-        """
-        if not blocks:
-            self._analyzed = True
-            return
-
-        # Collect inferred sizes for all blocks with positions
-        sizes = []
-        for block in blocks:
-            if not block.position:
-                continue
-
-            # Infer size from bounding box height
-            # For OCR blocks, font_size defaults to 12.0, so we use bbox height
-            bbox_height = block.position.height
-            # If font_size is not default (12.0), use it; otherwise infer from bbox
-            if block.font_size != 12.0:
-                inferred_size = block.font_size
-            else:
-                # Approximate: bbox height ≈ font size + leading (factor ~0.85)
-                inferred_size = bbox_height * 0.85
-
-            # Store for this block
-            block_id = id(block)
-            self._block_sizes[block_id] = inferred_size
-            sizes.append(inferred_size)
-
-        if not sizes:
-            self._analyzed = True
-            return
-
-        # Calculate percentiles for clustering
-        sizes_sorted = sorted(sizes)
-        n = len(sizes_sorted)
-
-        # Handle edge cases
-        if n == 1:
-            # Single block - treat as body
-            for block_id in self._block_sizes:
-                self._block_categories[block_id] = self.CATEGORY_BODY
-            self._analyzed = True
-            return
-
-        # Calculate percentile thresholds
-        heading_idx = int(n * self.HEADING_PERCENTILE / 100)
-        caption_idx = int(n * self.CAPTION_PERCENTILE / 100)
-
-        heading_threshold = sizes_sorted[min(heading_idx, n - 1)]
-        caption_threshold = sizes_sorted[max(caption_idx, 0)]
-
-        # Check if there's meaningful size variation
-        size_range = sizes_sorted[-1] - sizes_sorted[0]
-        if size_range < 3.0:  # Less than 3pt difference - treat all as body
-            for block_id in self._block_sizes:
-                self._block_categories[block_id] = self.CATEGORY_BODY
-            self._analyzed = True
-            return
-
-        # Categorize each block
-        for block_id, size in self._block_sizes.items():
-            if size >= heading_threshold:
-                self._block_categories[block_id] = self.CATEGORY_HEADING
-            elif size <= caption_threshold:
-                self._block_categories[block_id] = self.CATEGORY_CAPTION
-            else:
-                self._block_categories[block_id] = self.CATEGORY_BODY
-
-        self._analyzed = True
-
-    def get_normalized_font_size(self, block: TextBlock) -> float:
-        """Get the normalized font size for a block.
-
-        Args:
-            block: The TextBlock to get font size for.
-
-        Returns:
-            Normalized font size based on category.
-        """
-        block_id = id(block)
-        category = self._block_categories.get(block_id, self.CATEGORY_BODY)
-        return self.OUTPUT_SIZES.get(category, self.OUTPUT_SIZES[self.CATEGORY_BODY])
-
-    def get_category(self, block: TextBlock) -> str:
-        """Get the font category for a block.
-
-        Args:
-            block: The TextBlock to get category for.
-
-        Returns:
-            Category string (heading, body, or caption).
-        """
-        block_id = id(block)
-        return self._block_categories.get(block_id, self.CATEGORY_BODY)
-
-    def set_block_categories(self, blocks: list[TextBlock]) -> None:
-        """Set font_category field on all analyzed blocks.
-
-        Args:
-            blocks: List of TextBlock objects to update.
-        """
-        for block in blocks:
-            block_id = id(block)
-            if block_id in self._block_categories:
-                block.font_category = self._block_categories[block_id]
+from legacylipi.core.utils.text_wrapper import TextWrapper
 
 
 @dataclass
@@ -193,6 +52,13 @@ class OutputGenerator:
         """
         self._include_metadata = include_metadata
         self._include_page_numbers = include_page_numbers
+        self._text_wrapper: TextWrapper | None = None  # Lazy initialized with font
+
+    def _get_text_wrapper(self, font_path: str | None = None) -> TextWrapper:
+        """Get or create TextWrapper with font support."""
+        if self._text_wrapper is None or font_path:
+            self._text_wrapper = TextWrapper(font_path)
+        return self._text_wrapper
 
     def generate_metadata(
         self,
@@ -668,33 +534,11 @@ Generated: {metadata.generated_at}"""
         Returns:
             Font size that fits, or min_font_size if text is too long.
         """
-        # Cap at max_font_size for consistency across the document
-        font_size = max(min_font_size, min(original_font_size, max_font_size))
-
-        # Load font for measurement if available
-        font = None
-        if font_path and Path(font_path).exists():
-            try:
-                font = fitz.Font(fontfile=font_path)
-            except Exception:
-                pass
-
-        while font_size >= min_font_size:
-            # Wrap text at current font size
-            lines = self._wrap_text_to_width_precise(
-                text, available_width, font_size, font
-            )
-
-            # Calculate total height needed (line_height = font_size * 1.2)
-            line_height = font_size * 1.2
-            total_height = len(lines) * line_height
-
-            if total_height <= available_height:
-                return font_size
-
-            font_size *= 0.9  # Scale down by 10%
-
-        return min_font_size
+        wrapper = self._get_text_wrapper(font_path)
+        return wrapper.calculate_block_font_size(
+            text, available_width, available_height,
+            original_font_size, min_font_size, max_font_size
+        )
 
     def _wrap_text_to_width_precise(
         self,
@@ -714,41 +558,9 @@ Generated: {metadata.generated_at}"""
         Returns:
             List of wrapped lines.
         """
-        lines = []
-
-        for paragraph in text.split('\n'):
-            if not paragraph.strip():
-                lines.append('')
-                continue
-
-            words = paragraph.split()
-            current_line: list[str] = []
-            current_width = 0.0
-
-            for word in words:
-                if font:
-                    word_width = font.text_length(word, fontsize=font_size)
-                    space_width = font.text_length(' ', fontsize=font_size)
-                else:
-                    # Fallback estimation (average char width ~0.5 * font_size)
-                    word_width = len(word) * font_size * 0.5
-                    space_width = font_size * 0.25
-
-                test_width = current_width + (space_width if current_line else 0) + word_width
-
-                if test_width <= max_width:
-                    current_line.append(word)
-                    current_width = test_width
-                else:
-                    if current_line:
-                        lines.append(' '.join(current_line))
-                    current_line = [word]
-                    current_width = word_width
-
-            if current_line:
-                lines.append(' '.join(current_line))
-
-        return lines if lines else ['']
+        # Use TextWrapper's precise wrapping
+        wrapper = self._get_text_wrapper()
+        return wrapper.wrap_to_width_precise(text, max_width, font_size)
 
     def _preprocess_overlapping_blocks(
         self,
@@ -1424,27 +1236,10 @@ Generated: {metadata.generated_at}"""
         Returns:
             Font size that fits the text, or min_font_size if text is too long.
         """
-        usable_width = page_width - 2 * margin
-        usable_height = page_height - 2 * margin
-
-        # Start with base font size and scale down if needed
-        font_size = base_font_size
-
-        while font_size >= min_font_size:
-            # Wrap text at current font size
-            lines = self._wrap_text_for_pdf(text, usable_width, font_size)
-
-            # Calculate total height needed (line_height = font_size * 1.4)
-            line_height = font_size * 1.4
-            total_height = len(lines) * line_height
-
-            if total_height <= usable_height:
-                return font_size
-
-            # Scale down by 10%
-            font_size *= 0.9
-
-        return min_font_size
+        wrapper = self._get_text_wrapper()
+        return wrapper.calculate_fit_font_size(
+            text, page_width, page_height, margin, base_font_size, min_font_size
+        )
 
     def _add_metadata_to_pdf_page(
         self,
@@ -1518,33 +1313,8 @@ Generated: {metadata.generated_at}"""
         Returns:
             List of wrapped lines.
         """
-        lines = []
-
-        for paragraph in text.split("\n"):
-            if not paragraph.strip():
-                lines.append("")
-                continue
-
-            # Simple word wrapping
-            words = paragraph.split()
-            current_line = []
-            current_length = 0
-
-            for word in words:
-                word_length = len(word)
-                if current_length + word_length + 1 <= chars_per_line:
-                    current_line.append(word)
-                    current_length += word_length + 1
-                else:
-                    if current_line:
-                        lines.append(" ".join(current_line))
-                    current_line = [word]
-                    current_length = word_length
-
-            if current_line:
-                lines.append(" ".join(current_line))
-
-        return lines
+        wrapper = self._get_text_wrapper()
+        return wrapper.wrap_to_width_simple(text, chars_per_line)
 
     def generate(
         self,
