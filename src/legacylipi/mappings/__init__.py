@@ -1,8 +1,8 @@
 """Font mapping tables for legacy encodings."""
 
 from legacylipi.mappings.loader import (
-    MappingLoadError,
     MappingLoader,
+    MappingLoadError,
     MappingTable,
     get_mapping,
 )

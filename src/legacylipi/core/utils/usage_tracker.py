@@ -4,7 +4,6 @@ import json
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 
 class UsageTracker:
@@ -14,7 +13,7 @@ class UsageTracker:
     Automatically resets counters when a new month begins.
     """
 
-    def __init__(self, storage_path: Optional[Path] = None):
+    def __init__(self, storage_path: Path | None = None):
         """Initialize usage tracker with storage path.
 
         Args:
@@ -41,7 +40,7 @@ class UsageTracker:
         """
         try:
             if self.storage_path.exists():
-                with open(self.storage_path, 'r', encoding='utf-8') as f:
+                with open(self.storage_path, encoding="utf-8") as f:
                     return json.load(f)
         except (json.JSONDecodeError, OSError):
             # File corrupted or unreadable, return empty dict
@@ -57,13 +56,11 @@ class UsageTracker:
         """
         # Write to temporary file first, then rename atomically
         temp_fd, temp_path = tempfile.mkstemp(
-            dir=self.storage_path.parent,
-            prefix='.usage_',
-            suffix='.json.tmp'
+            dir=self.storage_path.parent, prefix=".usage_", suffix=".json.tmp"
         )
 
         try:
-            with open(temp_fd, 'w', encoding='utf-8') as f:
+            with open(temp_fd, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
 
             # Atomic rename (overwrites existing file)
@@ -143,7 +140,7 @@ class UsageTracker:
         if current_month not in data[service]:
             data[service][current_month] = {
                 "characters": 0,
-                "last_updated": datetime.now().isoformat()
+                "last_updated": datetime.now().isoformat(),
             }
 
         # Add characters and update timestamp
@@ -188,15 +185,11 @@ class UsageTracker:
         current_month = self._get_current_month_key()
 
         if service not in data or current_month not in data[service]:
-            return {
-                "characters": 0,
-                "month": current_month,
-                "last_updated": None
-            }
+            return {"characters": 0, "month": current_month, "last_updated": None}
 
         month_data = data[service][current_month]
         return {
             "characters": month_data.get("characters", 0),
             "month": current_month,
-            "last_updated": month_data.get("last_updated")
+            "last_updated": month_data.get("last_updated"),
         }

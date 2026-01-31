@@ -7,21 +7,20 @@ including Google Translate, Ollama (local LLM), and mock for testing.
 import asyncio
 import re
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import httpx
 
-from typing import Callable
-
 from legacylipi.core.models import TextBlock, TranslationBackend, TranslationResult
+from legacylipi.core.utils.language_codes import (
+    LANGUAGE_NAMES,
+    get_google_code,
+    get_language_name,
+    get_mymemory_code,
+)
 from legacylipi.core.utils.rate_limiter import RateLimiter
 from legacylipi.core.utils.usage_tracker import UsageTracker
-from legacylipi.core.utils.language_codes import (
-    get_language_name,
-    get_google_code,
-    get_mymemory_code,
-    LANGUAGE_NAMES,
-)
 
 
 class TranslationError(Exception):
@@ -860,7 +859,6 @@ class GCPCloudTranslateBackend(TranslationBackendBase):
 
         try:
             import asyncio
-            from google.cloud import translate_v3 as translate
 
             client = self._get_client()
             parent = f"projects/{self._project_id}/locations/{self._location}"
@@ -987,8 +985,6 @@ class GCPDocumentTranslationBackend(TranslationBackendBase):
         """
         # Fall back to regular text translation for plain text
         try:
-            from google.cloud import translate_v3beta1 as translate
-
             client = self._get_client()
             parent = f"projects/{self._project_id}/locations/{self._location}"
 
@@ -1268,10 +1264,7 @@ class TranslationEngine:
         target = target_lang or self._config.target_language
 
         # Filter to blocks that have text to translate
-        translatable_blocks = [
-            b for b in blocks
-            if (b.unicode_text or b.raw_text or "").strip()
-        ]
+        translatable_blocks = [b for b in blocks if (b.unicode_text or b.raw_text or "").strip()]
 
         if not translatable_blocks:
             return blocks
@@ -1292,6 +1285,7 @@ class TranslationEngine:
                     except TranslationError as e:
                         # Log the error and keep original text on failure
                         import logging
+
                         logging.warning(f"Translation failed for block: {e}")
                         block.translated_text = text
                 else:

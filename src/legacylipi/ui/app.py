@@ -6,11 +6,11 @@ A web interface for translating PDFs with legacy Indian font encodings.
 import asyncio
 import logging
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from queue import Queue, Empty
-from typing import Callable, Optional
+from queue import Empty, Queue
 
-from nicegui import ui, app
+from nicegui import ui
 
 logger = logging.getLogger(__name__)
 
@@ -74,10 +74,10 @@ class TranslationUI:
     """Main UI class for LegacyLipi translation interface."""
 
     def __init__(self):
-        self.uploaded_file: Optional[bytes] = None
-        self.uploaded_filename: Optional[str] = None
-        self.result_content: Optional[bytes] = None
-        self.result_filename: Optional[str] = None
+        self.uploaded_file: bytes | None = None
+        self.uploaded_filename: str | None = None
+        self.result_content: bytes | None = None
+        self.result_filename: str | None = None
         self.is_translating: bool = False
 
         # UI state
@@ -150,7 +150,9 @@ class TranslationUI:
                 percent = int(progress * 100)
                 self._safe_ui_update(lambda: self.progress_bar.set_value(progress))
                 self._safe_ui_update(lambda p=percent: self.progress_label.set_text(f"{p}%"))
-                self._safe_ui_update(lambda: self.status_label.set_text(f"Translating block {completed}/{total}..."))
+                self._safe_ui_update(
+                    lambda: self.status_label.set_text(f"Translating block {completed}/{total}...")
+                )
         except RuntimeError as e:
             # Handle client disconnection - parent slot deleted
             if "deleted" in str(e).lower():
@@ -185,7 +187,9 @@ class TranslationUI:
                             max_file_size=50_000_000,  # 50MB
                         ).props('accept=".pdf"').classes("w-full")
 
-                        self.file_label = ui.label("No file selected").classes("text-gray-400 text-sm mt-2")
+                        self.file_label = ui.label("No file selected").classes(
+                            "text-gray-400 text-sm mt-2"
+                        )
 
                     # Translation settings
                     with ui.card().classes("w-full"):
@@ -244,11 +248,15 @@ class TranslationUI:
                         self._build_translator_options()
 
                     # Translate button
-                    self.translate_button = ui.button(
-                        "Translate",
-                        on_click=self._translate,
-                        icon="translate",
-                    ).props("color=primary size=lg").classes("w-full")
+                    self.translate_button = (
+                        ui.button(
+                            "Translate",
+                            on_click=self._translate,
+                            icon="translate",
+                        )
+                        .props("color=primary size=lg")
+                        .classes("w-full")
+                    )
 
                 # Right column - Status Panel
                 with ui.column().classes("gap-4").style("flex: 1 1 400px; min-width: 300px;"):
@@ -262,7 +270,9 @@ class TranslationUI:
                             ui.label("Ready to translate").classes("text-xl text-gray-400 mt-2")
                             with ui.column().classes("mt-4 gap-1"):
                                 ui.label("1. Upload a PDF file").classes("text-sm text-gray-500")
-                                ui.label("2. Configure translation settings").classes("text-sm text-gray-500")
+                                ui.label("2. Configure translation settings").classes(
+                                    "text-sm text-gray-500"
+                                )
                                 ui.label("3. Click Translate").classes("text-sm text-gray-500")
 
                         # Progress state container
@@ -270,12 +280,16 @@ class TranslationUI:
                         self.progress_container.bind_visibility_from(self, "is_translating")
                         with self.progress_container:
                             ui.icon("hourglass_empty", size="xl", color="primary")
-                            self.status_label = ui.label("Starting...").classes("text-lg text-gray-400")
+                            self.status_label = ui.label("Starting...").classes(
+                                "text-lg text-gray-400"
+                            )
                             self.progress_bar = ui.linear_progress(value=0).classes("w-full")
                             self.progress_label = ui.label("0%").classes("text-sm text-gray-400")
 
                         # Timer for polling progress queue (100ms interval for smooth updates)
-                        self._progress_timer = ui.timer(0.1, callback=self._poll_progress_updates, active=False)
+                        self._progress_timer = ui.timer(
+                            0.1, callback=self._poll_progress_updates, active=False
+                        )
 
                         # Complete state container
                         self.complete_container = ui.column().classes("w-full items-center gap-4")
@@ -283,11 +297,15 @@ class TranslationUI:
                         with self.complete_container:
                             ui.icon("check_circle", size="xl", color="green")
                             ui.label("Translation Complete!").classes("text-xl text-green-500")
-                            self.download_button = ui.button(
-                                "Download Result",
-                                on_click=self._download_result,
-                                icon="download",
-                            ).props("color=positive size=lg").classes("w-full max-w-xs")
+                            self.download_button = (
+                                ui.button(
+                                    "Download Result",
+                                    on_click=self._download_result,
+                                    icon="download",
+                                )
+                                .props("color=positive size=lg")
+                                .classes("w-full max-w-xs")
+                            )
 
     def _build_ocr_options(self):
         """Build OCR-specific options."""
@@ -323,7 +341,9 @@ class TranslationUI:
                     min=100,
                     max=600,
                     step=50,
-                    on_change=lambda e: setattr(self, "ocr_dpi", int(e.value)) if e.value is not None else None,
+                    on_change=lambda e: setattr(self, "ocr_dpi", int(e.value))
+                    if e.value is not None
+                    else None,
                 ).classes("flex-1")
 
     def _toggle_ocr(self, e):
@@ -427,6 +447,7 @@ class TranslationUI:
         if self.translator == "gcp_cloud" and not self.gcp_project:
             # Try to get from environment
             import os
+
             if not os.environ.get("GCP_PROJECT_ID"):
                 ui.notify("Please enter your GCP Project ID.", type="warning")
                 return
@@ -445,10 +466,14 @@ class TranslationUI:
         try:
             # Import here to avoid circular imports and ensure deps are loaded
             from legacylipi.core.encoding_detector import EncodingDetector
-            from legacylipi.core.models import DetectionMethod, EncodingDetectionResult, OutputFormat
+            from legacylipi.core.models import (
+                DetectionMethod,
+                EncodingDetectionResult,
+                OutputFormat,
+            )
             from legacylipi.core.output_generator import OutputGenerator
             from legacylipi.core.pdf_parser import parse_pdf
-            from legacylipi.core.translator import create_translator, UsageLimitExceededError
+            from legacylipi.core.translator import UsageLimitExceededError, create_translator
             from legacylipi.core.unicode_converter import UnicodeConverter
 
             # Create temp file for input
@@ -471,20 +496,30 @@ class TranslationUI:
                     if self.ocr_engine == "easyocr":
                         from legacylipi.core.ocr_parser import parse_pdf_with_easyocr
 
-                        self._safe_ui_update(lambda: self.status_label.set_text("Running EasyOCR (first run downloads models)..."))
+                        self._safe_ui_update(
+                            lambda: self.status_label.set_text(
+                                "Running EasyOCR (first run downloads models)..."
+                            )
+                        )
                         # Run EasyOCR in executor to avoid blocking the event loop
                         document = await loop.run_in_executor(
                             None,
-                            lambda: parse_pdf_with_easyocr(input_path, lang=self.ocr_lang, dpi=self.ocr_dpi)
+                            lambda: parse_pdf_with_easyocr(
+                                input_path, lang=self.ocr_lang, dpi=self.ocr_dpi
+                            ),
                         )
                     else:
                         from legacylipi.core.ocr_parser import parse_pdf_with_ocr
 
-                        self._safe_ui_update(lambda: self.status_label.set_text("Running Tesseract OCR..."))
+                        self._safe_ui_update(
+                            lambda: self.status_label.set_text("Running Tesseract OCR...")
+                        )
                         # Run Tesseract in executor to avoid blocking the event loop
                         document = await loop.run_in_executor(
                             None,
-                            lambda: parse_pdf_with_ocr(input_path, lang=self.ocr_lang, dpi=self.ocr_dpi)
+                            lambda: parse_pdf_with_ocr(
+                                input_path, lang=self.ocr_lang, dpi=self.ocr_dpi
+                            ),
                         )
 
                     encoding_result = EncodingDetectionResult(
@@ -500,33 +535,38 @@ class TranslationUI:
                     # Step 2: Detect encoding
                     self._safe_ui_update(lambda: self.progress_bar.set_value(0.2))
                     self._safe_ui_update(lambda: self.progress_label.set_text("20%"))
-                    self._safe_ui_update(lambda: self.status_label.set_text("Detecting encoding..."))
+                    self._safe_ui_update(
+                        lambda: self.status_label.set_text("Detecting encoding...")
+                    )
                     await asyncio.sleep(0.1)
 
                     detector = EncodingDetector()
                     # Run encoding detection in executor
                     encoding_result, page_encodings = await loop.run_in_executor(
-                        None,
-                        lambda: detector.detect_from_document(document)
+                        None, lambda: detector.detect_from_document(document)
                     )
 
                     # Step 3: Convert to Unicode
                     self._safe_ui_update(lambda: self.progress_bar.set_value(0.3))
                     self._safe_ui_update(lambda: self.progress_label.set_text("30%"))
-                    self._safe_ui_update(lambda: self.status_label.set_text("Converting to Unicode..."))
+                    self._safe_ui_update(
+                        lambda: self.status_label.set_text("Converting to Unicode...")
+                    )
                     await asyncio.sleep(0.1)
 
                     converter = UnicodeConverter()
                     # Run Unicode conversion in executor
                     converted_doc = await loop.run_in_executor(
                         None,
-                        lambda: converter.convert_document(document, page_encodings=page_encodings)
+                        lambda: converter.convert_document(document, page_encodings=page_encodings),
                     )
 
                 # Step 4: Translate
                 self._safe_ui_update(lambda: self.progress_bar.set_value(0.4))
                 self._safe_ui_update(lambda: self.progress_label.set_text("40%"))
-                self._safe_ui_update(lambda: self.status_label.set_text(f"Translating with {self.translator}..."))
+                self._safe_ui_update(
+                    lambda: self.status_label.set_text(f"Translating with {self.translator}...")
+                )
                 await asyncio.sleep(0.1)
 
                 # Build translator kwargs
@@ -542,6 +582,7 @@ class TranslationUI:
                     translator_kwargs["trans_path"] = self.trans_path
                 elif self.translator == "gcp_cloud":
                     import os
+
                     project_id = self.gcp_project or os.environ.get("GCP_PROJECT_ID")
                     if project_id:
                         translator_kwargs["project_id"] = project_id
@@ -550,8 +591,7 @@ class TranslationUI:
 
                 # Check translation mode
                 use_structure_preserving = (
-                    self.translation_mode == "structure_preserving"
-                    and self.output_format == "pdf"
+                    self.translation_mode == "structure_preserving" and self.output_format == "pdf"
                 )
 
                 translation_result = None
@@ -567,8 +607,14 @@ class TranslationUI:
 
                     if all_blocks:
                         total_blocks = len(all_blocks)
-                        logger.info(f"Structure-preserving mode: {total_blocks} blocks to translate")
-                        self._safe_ui_update(lambda: self.status_label.set_text(f"Translating {total_blocks} text blocks..."))
+                        logger.info(
+                            f"Structure-preserving mode: {total_blocks} blocks to translate"
+                        )
+                        self._safe_ui_update(
+                            lambda: self.status_label.set_text(
+                                f"Translating {total_blocks} text blocks..."
+                            )
+                        )
 
                         # Progress callback for block translation - queues updates instead of direct UI calls
                         # This prevents WebSocket disconnection from concurrent callback bursts
@@ -576,7 +622,9 @@ class TranslationUI:
                             progress = 0.4 + (0.4 * completed / total)
                             # Log every 50 blocks or at completion
                             if completed % 50 == 0 or completed == total:
-                                logger.info(f"Translation progress: {completed}/{total} blocks ({progress*100:.1f}%)")
+                                logger.info(
+                                    f"Translation progress: {completed}/{total} blocks ({progress * 100:.1f}%)"
+                                )
                             # Queue progress update - timer will poll and update UI at controlled rate
                             self._progress_queue.put((completed, total, progress))
 
@@ -594,19 +642,33 @@ class TranslationUI:
                                 progress_callback=update_progress,
                             )
                             # Check if any blocks were actually translated
-                            translated_count = sum(1 for b in all_blocks if b.translated_text and b.translated_text != (b.unicode_text or b.raw_text))
+                            translated_count = sum(
+                                1
+                                for b in all_blocks
+                                if b.translated_text
+                                and b.translated_text != (b.unicode_text or b.raw_text)
+                            )
                             if translated_count == 0:
-                                self._safe_ui_update(lambda: ui.notify("Warning: No blocks were translated. Check API key and model.", type="warning"))
+                                self._safe_ui_update(
+                                    lambda: ui.notify(
+                                        "Warning: No blocks were translated. Check API key and model.",
+                                        type="warning",
+                                    )
+                                )
                         except UsageLimitExceededError as e:
-                            self._safe_ui_update(lambda e=e: ui.notify(
-                                f"GCP free tier limit exceeded: {e.current_usage:,}/{e.limit:,} chars. "
-                                f"Need {e.requested:,} more. Try a different translator.",
-                                type="warning",
-                                timeout=10000,
-                            ))
+                            self._safe_ui_update(
+                                lambda e=e: ui.notify(
+                                    f"GCP free tier limit exceeded: {e.current_usage:,}/{e.limit:,} chars. "
+                                    f"Need {e.requested:,} more. Try a different translator.",
+                                    type="warning",
+                                    timeout=10000,
+                                )
+                            )
                             raise
                         except Exception as e:
-                            self._safe_ui_update(lambda e=e: ui.notify(f"Translation error: {e}", type="negative"))
+                            self._safe_ui_update(
+                                lambda e=e: ui.notify(f"Translation error: {e}", type="negative")
+                            )
                             raise
                     else:
                         # No positioned blocks - fall back to flowing mode
@@ -624,20 +686,31 @@ class TranslationUI:
                     try:
                         translation_result = await loop.run_in_executor(
                             None,
-                            lambda: engine.translate(unicode_text, source_lang="mr", target_lang=self.target_lang),
+                            lambda: engine.translate(
+                                unicode_text, source_lang="mr", target_lang=self.target_lang
+                            ),
                         )
                         if not translation_result or not translation_result.translated_text:
-                            self._safe_ui_update(lambda: ui.notify("Warning: Translation returned empty result. Check API key and model.", type="warning"))
+                            self._safe_ui_update(
+                                lambda: ui.notify(
+                                    "Warning: Translation returned empty result. Check API key and model.",
+                                    type="warning",
+                                )
+                            )
                     except UsageLimitExceededError as e:
-                        self._safe_ui_update(lambda e=e: ui.notify(
-                            f"GCP free tier limit exceeded: {e.current_usage:,}/{e.limit:,} chars. "
-                            f"Need {e.requested:,} more. Try a different translator.",
-                            type="warning",
-                            timeout=10000,
-                        ))
+                        self._safe_ui_update(
+                            lambda e=e: ui.notify(
+                                f"GCP free tier limit exceeded: {e.current_usage:,}/{e.limit:,} chars. "
+                                f"Need {e.requested:,} more. Try a different translator.",
+                                type="warning",
+                                timeout=10000,
+                            )
+                        )
                         raise
                     except Exception as e:
-                        self._safe_ui_update(lambda e=e: ui.notify(f"Translation error: {e}", type="negative"))
+                        self._safe_ui_update(
+                            lambda e=e: ui.notify(f"Translation error: {e}", type="negative")
+                        )
                         raise
 
                 self._safe_ui_update(lambda: self.progress_bar.set_value(0.8))
@@ -646,7 +719,11 @@ class TranslationUI:
                 await asyncio.sleep(0.1)
 
                 # Step 5: Generate output
-                fmt_map = {"pdf": OutputFormat.PDF, "text": OutputFormat.TEXT, "markdown": OutputFormat.MARKDOWN}
+                fmt_map = {
+                    "pdf": OutputFormat.PDF,
+                    "text": OutputFormat.TEXT,
+                    "markdown": OutputFormat.MARKDOWN,
+                }
                 output_fmt = fmt_map.get(self.output_format, OutputFormat.TEXT)
 
                 generator = OutputGenerator()
@@ -687,7 +764,9 @@ class TranslationUI:
                     f"size={len(self.result_content)} bytes"
                 )
 
-                self._safe_ui_update(lambda: ui.notify("Translation completed successfully!", type="positive"))
+                self._safe_ui_update(
+                    lambda: ui.notify("Translation completed successfully!", type="positive")
+                )
                 self._safe_ui_update(lambda: self.complete_container.set_visibility(True))
 
             finally:
@@ -702,9 +781,11 @@ class TranslationUI:
                     "file": self.uploaded_filename,
                     "translator": self.translator,
                     "mode": self.translation_mode,
-                }
+                },
             )
-            self._safe_ui_update(lambda e=e: ui.notify(f"Translation failed: {str(e)}", type="negative"))
+            self._safe_ui_update(
+                lambda e=e: ui.notify(f"Translation failed: {str(e)}", type="negative")
+            )
             self._safe_ui_update(lambda e=e: self.status_label.set_text(f"Error: {str(e)}"))
             # Show idle state again on error so user can retry
             self._safe_ui_update(lambda: self.idle_container.set_visibility(True))

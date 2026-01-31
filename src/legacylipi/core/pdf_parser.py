@@ -5,7 +5,6 @@ and positional metadata from PDF documents.
 """
 
 from pathlib import Path
-from typing import Optional
 
 import fitz  # PyMuPDF
 
@@ -43,7 +42,7 @@ class PDFParser:
         if not self.filepath.suffix.lower() == ".pdf":
             raise PDFParseError(f"Not a PDF file: {self.filepath}")
 
-        self._doc: Optional[fitz.Document] = None
+        self._doc: fitz.Document | None = None
 
     def __enter__(self) -> "PDFParser":
         """Context manager entry."""
@@ -54,7 +53,7 @@ class PDFParser:
         """Context manager exit."""
         self.close()
 
-    def open(self, password: Optional[str] = None) -> None:
+    def open(self, password: str | None = None) -> None:
         """Open the PDF document.
 
         Args:
@@ -239,7 +238,7 @@ class PDFParser:
                             c = char_info.get("c", "")
                             # Filter: keep printable ASCII and extended ASCII (legacy encoding)
                             # Skip U+FFFD replacement characters and control chars
-                            if c and ord(c) != 0xFFFD and (c >= ' ' or c in '\n\r\t'):
+                            if c and ord(c) != 0xFFFD and (c >= " " or c in "\n\r\t"):
                                 span_text += c
                         text = span_text
                     else:
@@ -303,16 +302,16 @@ class PDFParser:
             if code == 0xFFFD:
                 continue
             # Skip control characters except whitespace
-            if code < 32 and c not in '\n\r\t':
+            if code < 32 and c not in "\n\r\t":
                 continue
             # Keep printable ASCII (32-126) and extended ASCII (128-255)
             # Extended ASCII is used by legacy Indian font encodings
-            if 32 <= code <= 126 or 128 <= code <= 255 or c in '\n\r\t':
+            if 32 <= code <= 126 or 128 <= code <= 255 or c in "\n\r\t":
                 cleaned.append(c)
 
-        return ''.join(cleaned)
+        return "".join(cleaned)
 
-    def parse(self, password: Optional[str] = None) -> PDFDocument:
+    def parse(self, password: str | None = None) -> PDFDocument:
         """Parse the entire PDF document.
 
         Args:
@@ -348,7 +347,7 @@ class PDFParser:
                 self.close()
 
 
-def parse_pdf(filepath: Path | str, password: Optional[str] = None) -> PDFDocument:
+def parse_pdf(filepath: Path | str, password: str | None = None) -> PDFDocument:
     """Convenience function to parse a PDF document.
 
     Args:

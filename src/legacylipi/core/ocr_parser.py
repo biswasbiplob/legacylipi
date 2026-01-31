@@ -7,9 +7,7 @@ text, particularly useful for legacy Marathi documents.
 
 import shutil
 import subprocess
-import tempfile
 from pathlib import Path
-from typing import Optional
 
 import fitz  # PyMuPDF
 
@@ -25,6 +23,7 @@ from legacylipi.core.models import (
 try:
     import pytesseract
     from PIL import Image
+
     PYTESSERACT_AVAILABLE = True
 except ImportError:
     PYTESSERACT_AVAILABLE = False
@@ -32,6 +31,7 @@ except ImportError:
 # Check if Google Cloud Vision is available
 try:
     from google.cloud import vision
+
     GOOGLE_VISION_AVAILABLE = True
 except ImportError:
     GOOGLE_VISION_AVAILABLE = False
@@ -39,6 +39,7 @@ except ImportError:
 # Check if EasyOCR is available
 try:
     import easyocr
+
     EASYOCR_AVAILABLE = True
 except ImportError:
     EASYOCR_AVAILABLE = False
@@ -55,10 +56,11 @@ def detect_gpu_backend() -> tuple[bool, str]:
     """
     try:
         import torch
+
         if torch.cuda.is_available():
             return True, "cuda"
         # Check for Apple Silicon MPS (Metal Performance Shaders)
-        if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             return True, "mps"
     except ImportError:
         pass
@@ -67,16 +69,19 @@ def detect_gpu_backend() -> tuple[bool, str]:
 
 class OCRError(Exception):
     """Exception raised when OCR processing fails."""
+
     pass
 
 
 class TesseractNotFoundError(OCRError):
     """Exception raised when Tesseract is not installed."""
+
     pass
 
 
 class LanguageNotAvailableError(OCRError):
     """Exception raised when requested OCR language is not available."""
+
     pass
 
 
@@ -92,12 +97,9 @@ def check_tesseract_available() -> tuple[bool, str]:
 
     try:
         result = subprocess.run(
-            [tesseract_path, "--version"],
-            capture_output=True,
-            text=True,
-            timeout=10
+            [tesseract_path, "--version"], capture_output=True, text=True, timeout=10
         )
-        version_line = result.stdout.split('\n')[0] if result.stdout else "unknown"
+        version_line = result.stdout.split("\n")[0] if result.stdout else "unknown"
         return True, f"Tesseract available: {version_line}"
     except Exception as e:
         return False, f"Tesseract check failed: {e}"
@@ -115,13 +117,10 @@ def get_available_languages() -> list[str]:
 
     try:
         result = subprocess.run(
-            [tesseract_path, "--list-langs"],
-            capture_output=True,
-            text=True,
-            timeout=10
+            [tesseract_path, "--list-langs"], capture_output=True, text=True, timeout=10
         )
         # Parse output - first line is header, rest are language codes
-        lines = result.stdout.strip().split('\n')
+        lines = result.stdout.strip().split("\n")
         if len(lines) > 1:
             return [lang.strip() for lang in lines[1:] if lang.strip()]
         return []
@@ -150,13 +149,13 @@ class OCRParser:
 
     # Language codes for common Indian languages
     LANGUAGE_CODES = {
-        'marathi': 'mar',
-        'mr': 'mar',
-        'hindi': 'hin',
-        'hi': 'hin',
-        'english': 'eng',
-        'en': 'eng',
-        'devanagari': 'mar+hin',  # Combined for scripts
+        "marathi": "mar",
+        "mr": "mar",
+        "hindi": "hin",
+        "hi": "hin",
+        "english": "eng",
+        "en": "eng",
+        "devanagari": "mar+hin",  # Combined for scripts
     }
 
     def __init__(
@@ -199,7 +198,7 @@ class OCRParser:
         if not available:
             raise TesseractNotFoundError(msg)
 
-        self._doc: Optional[fitz.Document] = None
+        self._doc: fitz.Document | None = None
 
     def __enter__(self) -> "OCRParser":
         """Context manager entry."""
@@ -210,7 +209,7 @@ class OCRParser:
         """Context manager exit."""
         self.close()
 
-    def open(self, password: Optional[str] = None) -> None:
+    def open(self, password: str | None = None) -> None:
         """Open the PDF document.
 
         Args:
@@ -303,35 +302,30 @@ class OCRParser:
         config = f"--psm {self.psm}"
 
         # Get full text
-        full_text = pytesseract.image_to_string(
-            img,
-            lang=self.lang,
-            config=config
-        )
+        full_text = pytesseract.image_to_string(img, lang=self.lang, config=config)
 
         # Get detailed word/line data with bounding boxes
         try:
             ocr_data = pytesseract.image_to_data(
-                img,
-                lang=self.lang,
-                config=config,
-                output_type=pytesseract.Output.DICT
+                img, lang=self.lang, config=config, output_type=pytesseract.Output.DICT
             )
 
             word_data = []
-            for i in range(len(ocr_data['text'])):
-                text = ocr_data['text'][i].strip()
+            for i in range(len(ocr_data["text"])):
+                text = ocr_data["text"][i].strip()
                 if text:
-                    word_data.append({
-                        'text': text,
-                        'left': ocr_data['left'][i],
-                        'top': ocr_data['top'][i],
-                        'width': ocr_data['width'][i],
-                        'height': ocr_data['height'][i],
-                        'conf': ocr_data['conf'][i],
-                        'line_num': ocr_data['line_num'][i],
-                        'block_num': ocr_data['block_num'][i],
-                    })
+                    word_data.append(
+                        {
+                            "text": text,
+                            "left": ocr_data["left"][i],
+                            "top": ocr_data["top"][i],
+                            "width": ocr_data["width"][i],
+                            "height": ocr_data["height"][i],
+                            "conf": ocr_data["conf"][i],
+                            "line_num": ocr_data["line_num"][i],
+                            "block_num": ocr_data["block_num"][i],
+                        }
+                    )
         except Exception:
             # Fall back to simple text extraction without bounding boxes
             word_data = []
@@ -376,9 +370,7 @@ class OCRParser:
         return pdf_page
 
     def _group_words_into_blocks(
-        self,
-        word_data: list[dict],
-        page_rect: fitz.Rect
+        self, word_data: list[dict], page_rect: fitz.Rect
     ) -> list[TextBlock]:
         """Group OCR words into text blocks by line/block.
 
@@ -396,24 +388,24 @@ class OCRParser:
         # Group words by block and line
         blocks_dict: dict[tuple[int, int], list[dict]] = {}
         for word in word_data:
-            key = (word['block_num'], word['line_num'])
+            key = (word["block_num"], word["line_num"])
             if key not in blocks_dict:
                 blocks_dict[key] = []
             blocks_dict[key].append(word)
 
         # Convert to TextBlock objects
         text_blocks = []
-        for (block_num, line_num), words in sorted(blocks_dict.items()):
-            line_text = " ".join(w['text'] for w in words)
+        for (_block_num, _line_num), words in sorted(blocks_dict.items()):
+            line_text = " ".join(w["text"] for w in words)
 
             # Calculate bounding box
-            min_left = min(w['left'] for w in words)
-            min_top = min(w['top'] for w in words)
-            max_right = max(w['left'] + w['width'] for w in words)
-            max_bottom = max(w['top'] + w['height'] for w in words)
+            min_left = min(w["left"] for w in words)
+            min_top = min(w["top"] for w in words)
+            max_right = max(w["left"] + w["width"] for w in words)
+            max_bottom = max(w["top"] + w["height"] for w in words)
 
             # Average confidence
-            confidences = [w['conf'] for w in words if w['conf'] >= 0]
+            confidences = [w["conf"] for w in words if w["conf"] >= 0]
             avg_conf = sum(confidences) / len(confidences) if confidences else 0.0
 
             text_blocks.append(
@@ -432,7 +424,7 @@ class OCRParser:
 
         return text_blocks
 
-    def parse(self, password: Optional[str] = None) -> PDFDocument:
+    def parse(self, password: str | None = None) -> PDFDocument:
         """Parse the entire PDF using OCR.
 
         Args:
@@ -466,10 +458,7 @@ class OCRParser:
 
 
 def parse_pdf_with_ocr(
-    filepath: Path | str,
-    lang: str = "mar",
-    dpi: int = 300,
-    password: Optional[str] = None
+    filepath: Path | str, lang: str = "mar", dpi: int = 300, password: str | None = None
 ) -> PDFDocument:
     """Convenience function to parse a PDF using OCR.
 
@@ -506,34 +495,34 @@ class GoogleVisionOCRParser:
 
     # Language hints for Indian languages
     LANGUAGE_HINTS = {
-        'marathi': ['mr', 'hi'],  # Marathi with Hindi fallback
-        'mr': ['mr', 'hi'],
-        'mar': ['mr', 'hi'],
-        'hindi': ['hi'],
-        'hi': ['hi'],
-        'hin': ['hi'],
-        'tamil': ['ta'],
-        'ta': ['ta'],
-        'tam': ['ta'],
-        'telugu': ['te'],
-        'te': ['te'],
-        'tel': ['te'],
-        'kannada': ['kn'],
-        'kn': ['kn'],
-        'kan': ['kn'],
-        'malayalam': ['ml'],
-        'ml': ['ml'],
-        'mal': ['ml'],
-        'bengali': ['bn'],
-        'bn': ['bn'],
-        'ben': ['bn'],
-        'gujarati': ['gu'],
-        'gu': ['gu'],
-        'guj': ['gu'],
-        'punjabi': ['pa'],
-        'pa': ['pa'],
-        'pan': ['pa'],
-        'devanagari': ['mr', 'hi', 'sa'],  # Devanagari scripts
+        "marathi": ["mr", "hi"],  # Marathi with Hindi fallback
+        "mr": ["mr", "hi"],
+        "mar": ["mr", "hi"],
+        "hindi": ["hi"],
+        "hi": ["hi"],
+        "hin": ["hi"],
+        "tamil": ["ta"],
+        "ta": ["ta"],
+        "tam": ["ta"],
+        "telugu": ["te"],
+        "te": ["te"],
+        "tel": ["te"],
+        "kannada": ["kn"],
+        "kn": ["kn"],
+        "kan": ["kn"],
+        "malayalam": ["ml"],
+        "ml": ["ml"],
+        "mal": ["ml"],
+        "bengali": ["bn"],
+        "bn": ["bn"],
+        "ben": ["bn"],
+        "gujarati": ["gu"],
+        "gu": ["gu"],
+        "guj": ["gu"],
+        "punjabi": ["pa"],
+        "pa": ["pa"],
+        "pan": ["pa"],
+        "devanagari": ["mr", "hi", "sa"],  # Devanagari scripts
     }
 
     def __init__(
@@ -560,8 +549,7 @@ class GoogleVisionOCRParser:
 
         if not GOOGLE_VISION_AVAILABLE:
             raise OCRError(
-                "google-cloud-vision not installed. Install with: "
-                "pip install google-cloud-vision"
+                "google-cloud-vision not installed. Install with: pip install google-cloud-vision"
             )
 
         # Get language hints
@@ -578,7 +566,7 @@ class GoogleVisionOCRParser:
                 "Make sure GOOGLE_APPLICATION_CREDENTIALS is set to your service account key file."
             )
 
-        self._doc: Optional[fitz.Document] = None
+        self._doc: fitz.Document | None = None
 
     def __enter__(self) -> "GoogleVisionOCRParser":
         """Context manager entry."""
@@ -589,7 +577,7 @@ class GoogleVisionOCRParser:
         """Context manager exit."""
         self.close()
 
-    def open(self, password: Optional[str] = None) -> None:
+    def open(self, password: str | None = None) -> None:
         """Open the PDF document.
 
         Args:
@@ -680,15 +668,12 @@ class GoogleVisionOCRParser:
         image = vision.Image(content=image_bytes)
 
         # Configure image context with language hints
-        image_context = vision.ImageContext(
-            language_hints=self.language_hints
-        )
+        image_context = vision.ImageContext(language_hints=self.language_hints)
 
         # Perform document text detection (better for dense text)
         try:
             response = self._client.document_text_detection(
-                image=image,
-                image_context=image_context
+                image=image, image_context=image_context
             )
         except Exception as e:
             raise OCRError(f"Google Vision API error: {e}")
@@ -709,9 +694,7 @@ class GoogleVisionOCRParser:
                     block_num = len(word_data) // 100  # Approximate block grouping
                     for paragraph in block.paragraphs:
                         for word in paragraph.words:
-                            word_text = "".join(
-                                symbol.text for symbol in word.symbols
-                            )
+                            word_text = "".join(symbol.text for symbol in word.symbols)
 
                             # Get bounding box
                             vertices = word.bounding_box.vertices
@@ -722,18 +705,20 @@ class GoogleVisionOCRParser:
                                 bottom = max(v.y for v in vertices)
 
                                 # Get confidence
-                                conf = word.confidence * 100 if hasattr(word, 'confidence') else 90
+                                conf = word.confidence * 100 if hasattr(word, "confidence") else 90
 
-                                word_data.append({
-                                    'text': word_text,
-                                    'left': left,
-                                    'top': top,
-                                    'width': right - left,
-                                    'height': bottom - top,
-                                    'conf': conf,
-                                    'block_num': block_num,
-                                    'line_num': 0,  # Vision API doesn't provide line numbers
-                                })
+                                word_data.append(
+                                    {
+                                        "text": word_text,
+                                        "left": left,
+                                        "top": top,
+                                        "width": right - left,
+                                        "height": bottom - top,
+                                        "conf": conf,
+                                        "block_num": block_num,
+                                        "line_num": 0,  # Vision API doesn't provide line numbers
+                                    }
+                                )
 
         return full_text, word_data
 
@@ -775,9 +760,7 @@ class GoogleVisionOCRParser:
         return pdf_page
 
     def _group_words_into_blocks(
-        self,
-        word_data: list[dict],
-        page_rect: fitz.Rect
+        self, word_data: list[dict], page_rect: fitz.Rect
     ) -> list[TextBlock]:
         """Group OCR words into text blocks by proximity.
 
@@ -798,7 +781,7 @@ class GoogleVisionOCRParser:
 
         # Group words into lines based on vertical proximity
         # Sort by top coordinate first
-        sorted_words = sorted(word_data, key=lambda w: (w['top'], w['left']))
+        sorted_words = sorted(word_data, key=lambda w: (w["top"], w["left"]))
 
         lines: list[list[dict]] = []
         current_line: list[dict] = []
@@ -806,18 +789,18 @@ class GoogleVisionOCRParser:
         line_threshold = 20  # Pixels threshold for same line
 
         for word in sorted_words:
-            if last_top < 0 or abs(word['top'] - last_top) <= line_threshold:
+            if last_top < 0 or abs(word["top"] - last_top) <= line_threshold:
                 current_line.append(word)
             else:
                 if current_line:
                     # Sort line by horizontal position
-                    current_line.sort(key=lambda w: w['left'])
+                    current_line.sort(key=lambda w: w["left"])
                     lines.append(current_line)
                 current_line = [word]
-            last_top = word['top']
+            last_top = word["top"]
 
         if current_line:
-            current_line.sort(key=lambda w: w['left'])
+            current_line.sort(key=lambda w: w["left"])
             lines.append(current_line)
 
         # Convert lines to TextBlock objects
@@ -826,16 +809,16 @@ class GoogleVisionOCRParser:
             if not line_words:
                 continue
 
-            line_text = " ".join(w['text'] for w in line_words)
+            line_text = " ".join(w["text"] for w in line_words)
 
             # Calculate bounding box
-            min_left = min(w['left'] for w in line_words)
-            min_top = min(w['top'] for w in line_words)
-            max_right = max(w['left'] + w['width'] for w in line_words)
-            max_bottom = max(w['top'] + w['height'] for w in line_words)
+            min_left = min(w["left"] for w in line_words)
+            min_top = min(w["top"] for w in line_words)
+            max_right = max(w["left"] + w["width"] for w in line_words)
+            max_bottom = max(w["top"] + w["height"] for w in line_words)
 
             # Average confidence
-            confidences = [w['conf'] for w in line_words if w['conf'] >= 0]
+            confidences = [w["conf"] for w in line_words if w["conf"] >= 0]
             avg_conf = sum(confidences) / len(confidences) if confidences else 90.0
 
             text_blocks.append(
@@ -854,7 +837,7 @@ class GoogleVisionOCRParser:
 
         return text_blocks
 
-    def parse(self, password: Optional[str] = None) -> PDFDocument:
+    def parse(self, password: str | None = None) -> PDFDocument:
         """Parse the entire PDF using Google Cloud Vision OCR.
 
         Args:
@@ -888,10 +871,7 @@ class GoogleVisionOCRParser:
 
 
 def parse_pdf_with_google_vision(
-    filepath: Path | str,
-    lang: str = "mr",
-    dpi: int = 300,
-    password: Optional[str] = None
+    filepath: Path | str, lang: str = "mr", dpi: int = 300, password: str | None = None
 ) -> PDFDocument:
     """Parse a PDF using Google Cloud Vision OCR.
 
@@ -923,9 +903,13 @@ def check_google_vision_available() -> tuple[bool, str]:
         Tuple of (is_available, message).
     """
     if not GOOGLE_VISION_AVAILABLE:
-        return False, "google-cloud-vision not installed. Install with: pip install google-cloud-vision"
+        return (
+            False,
+            "google-cloud-vision not installed. Install with: pip install google-cloud-vision",
+        )
 
     import os
+
     if not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
         return False, (
             "GOOGLE_APPLICATION_CREDENTIALS not set. "
@@ -933,7 +917,7 @@ def check_google_vision_available() -> tuple[bool, str]:
         )
 
     try:
-        client = vision.ImageAnnotatorClient()
+        vision.ImageAnnotatorClient()
         return True, "Google Cloud Vision is available and configured"
     except Exception as e:
         return False, f"Failed to initialize Google Vision client: {e}"
@@ -957,37 +941,37 @@ class EasyOCRParser:
 
     # Language codes mapping
     LANGUAGE_CODES = {
-        'marathi': ['mr', 'en'],  # Marathi + English fallback
-        'mr': ['mr', 'en'],
-        'mar': ['mr', 'en'],
-        'hindi': ['hi', 'en'],
-        'hi': ['hi', 'en'],
-        'hin': ['hi', 'en'],
-        'tamil': ['ta', 'en'],
-        'ta': ['ta', 'en'],
-        'tam': ['ta', 'en'],
-        'telugu': ['te', 'en'],
-        'te': ['te', 'en'],
-        'tel': ['te', 'en'],
-        'kannada': ['kn', 'en'],
-        'kn': ['kn', 'en'],
-        'kan': ['kn', 'en'],
-        'malayalam': ['ml', 'en'],
-        'ml': ['ml', 'en'],
-        'mal': ['ml', 'en'],
-        'bengali': ['bn', 'en'],
-        'bn': ['bn', 'en'],
-        'ben': ['bn', 'en'],
-        'gujarati': ['gu', 'en'],
-        'gu': ['gu', 'en'],
-        'guj': ['gu', 'en'],
-        'punjabi': ['pa', 'en'],
-        'pa': ['pa', 'en'],
-        'pan': ['pa', 'en'],
-        'devanagari': ['hi', 'mr', 'en'],  # Hindi + Marathi for Devanagari
-        'english': ['en'],
-        'en': ['en'],
-        'eng': ['en'],
+        "marathi": ["mr", "en"],  # Marathi + English fallback
+        "mr": ["mr", "en"],
+        "mar": ["mr", "en"],
+        "hindi": ["hi", "en"],
+        "hi": ["hi", "en"],
+        "hin": ["hi", "en"],
+        "tamil": ["ta", "en"],
+        "ta": ["ta", "en"],
+        "tam": ["ta", "en"],
+        "telugu": ["te", "en"],
+        "te": ["te", "en"],
+        "tel": ["te", "en"],
+        "kannada": ["kn", "en"],
+        "kn": ["kn", "en"],
+        "kan": ["kn", "en"],
+        "malayalam": ["ml", "en"],
+        "ml": ["ml", "en"],
+        "mal": ["ml", "en"],
+        "bengali": ["bn", "en"],
+        "bn": ["bn", "en"],
+        "ben": ["bn", "en"],
+        "gujarati": ["gu", "en"],
+        "gu": ["gu", "en"],
+        "guj": ["gu", "en"],
+        "punjabi": ["pa", "en"],
+        "pa": ["pa", "en"],
+        "pan": ["pa", "en"],
+        "devanagari": ["hi", "mr", "en"],  # Hindi + Marathi for Devanagari
+        "english": ["en"],
+        "en": ["en"],
+        "eng": ["en"],
     }
 
     def __init__(
@@ -1025,7 +1009,7 @@ class EasyOCRParser:
 
         # Get language codes for EasyOCR
         lang_lower = lang.lower()
-        self.languages = self.LANGUAGE_CODES.get(lang_lower, ['en'])
+        self.languages = self.LANGUAGE_CODES.get(lang_lower, ["en"])
         self.dpi = dpi
 
         # Auto-detect GPU backend
@@ -1040,13 +1024,16 @@ class EasyOCRParser:
         # Initialize EasyOCR reader (lazy - downloads models on first use)
         try:
             import logging
+
             ocr_logger = logging.getLogger(__name__)
-            ocr_logger.info(f"Initializing EasyOCR with GPU={self.gpu} (backend: {self._gpu_backend})")
+            ocr_logger.info(
+                f"Initializing EasyOCR with GPU={self.gpu} (backend: {self._gpu_backend})"
+            )
             self._reader = easyocr.Reader(self.languages, gpu=self.gpu)
         except Exception as e:
             raise OCRError(f"Failed to initialize EasyOCR: {e}")
 
-        self._doc: Optional[fitz.Document] = None
+        self._doc: fitz.Document | None = None
 
     def __enter__(self) -> "EasyOCRParser":
         """Context manager entry."""
@@ -1057,7 +1044,7 @@ class EasyOCRParser:
         """Context manager exit."""
         self.close()
 
-    def open(self, password: Optional[str] = None) -> None:
+    def open(self, password: str | None = None) -> None:
         """Open the PDF document."""
         try:
             self._doc = fitz.open(self.filepath)
@@ -1161,18 +1148,20 @@ class EasyOCRParser:
                 right = max(x_coords)
                 bottom = max(y_coords)
 
-                word_data.append({
-                    'text': text,
-                    'left': left,
-                    'top': top,
-                    'width': right - left,
-                    'height': bottom - top,
-                    'conf': confidence * 100,  # Convert to 0-100 scale
-                    'block_num': 0,
-                    'line_num': 0,
-                })
+                word_data.append(
+                    {
+                        "text": text,
+                        "left": left,
+                        "top": top,
+                        "width": right - left,
+                        "height": bottom - top,
+                        "conf": confidence * 100,  # Convert to 0-100 scale
+                        "block_num": 0,
+                        "line_num": 0,
+                    }
+                )
 
-        full_text = ' '.join(text_parts)
+        full_text = " ".join(text_parts)
         return full_text, word_data
 
     def parse_page(self, page_number: int) -> PDFPage:
@@ -1212,9 +1201,7 @@ class EasyOCRParser:
         return pdf_page
 
     def _group_words_into_blocks(
-        self,
-        word_data: list[dict],
-        page_rect: fitz.Rect
+        self, word_data: list[dict], page_rect: fitz.Rect
     ) -> list[TextBlock]:
         """Group OCR words into text blocks by proximity."""
         if not word_data:
@@ -1225,7 +1212,7 @@ class EasyOCRParser:
         scale_y = page_rect.height / (self.dpi / 72.0 * page_rect.height)
 
         # Sort by vertical position then horizontal
-        sorted_words = sorted(word_data, key=lambda w: (w['top'], w['left']))
+        sorted_words = sorted(word_data, key=lambda w: (w["top"], w["left"]))
 
         # Group into lines
         lines: list[list[dict]] = []
@@ -1234,17 +1221,17 @@ class EasyOCRParser:
         line_threshold = 30  # Pixels threshold for same line
 
         for word in sorted_words:
-            if last_top < 0 or abs(word['top'] - last_top) <= line_threshold:
+            if last_top < 0 or abs(word["top"] - last_top) <= line_threshold:
                 current_line.append(word)
             else:
                 if current_line:
-                    current_line.sort(key=lambda w: w['left'])
+                    current_line.sort(key=lambda w: w["left"])
                     lines.append(current_line)
                 current_line = [word]
-            last_top = word['top']
+            last_top = word["top"]
 
         if current_line:
-            current_line.sort(key=lambda w: w['left'])
+            current_line.sort(key=lambda w: w["left"])
             lines.append(current_line)
 
         # Convert to TextBlocks
@@ -1253,14 +1240,14 @@ class EasyOCRParser:
             if not line_words:
                 continue
 
-            line_text = ' '.join(w['text'] for w in line_words)
+            line_text = " ".join(w["text"] for w in line_words)
 
-            min_left = min(w['left'] for w in line_words)
-            min_top = min(w['top'] for w in line_words)
-            max_right = max(w['left'] + w['width'] for w in line_words)
-            max_bottom = max(w['top'] + w['height'] for w in line_words)
+            min_left = min(w["left"] for w in line_words)
+            min_top = min(w["top"] for w in line_words)
+            max_right = max(w["left"] + w["width"] for w in line_words)
+            max_bottom = max(w["top"] + w["height"] for w in line_words)
 
-            confidences = [w['conf'] for w in line_words if w['conf'] >= 0]
+            confidences = [w["conf"] for w in line_words if w["conf"] >= 0]
             avg_conf = sum(confidences) / len(confidences) if confidences else 85.0
 
             text_blocks.append(
@@ -1279,7 +1266,7 @@ class EasyOCRParser:
 
         return text_blocks
 
-    def parse(self, password: Optional[str] = None) -> PDFDocument:
+    def parse(self, password: str | None = None) -> PDFDocument:
         """Parse the entire PDF using EasyOCR.
 
         Args:
@@ -1317,7 +1304,7 @@ def parse_pdf_with_easyocr(
     lang: str = "mr",
     dpi: int = 300,
     gpu: bool | str = "auto",
-    password: Optional[str] = None
+    password: str | None = None,
 ) -> PDFDocument:
     """Parse a PDF using EasyOCR - completely FREE, no API keys needed.
 

@@ -4,10 +4,8 @@ This module converts text from legacy Indian font encodings (Shree-Lipi,
 Kruti Dev, etc.) to proper Unicode Devanagari.
 """
 
-import re
 import unicodedata
 from dataclasses import dataclass, field
-from typing import Optional
 
 from legacylipi.core.models import (
     EncodingDetectionResult,
@@ -16,10 +14,9 @@ from legacylipi.core.models import (
     TextBlock,
 )
 from legacylipi.mappings.loader import (
-    MappingLoadError,
     MappingLoader,
+    MappingLoadError,
     MappingTable,
-    get_mapping,
 )
 
 
@@ -66,7 +63,7 @@ class UnicodeConverter:
 
     def __init__(
         self,
-        mapping_loader: Optional[MappingLoader] = None,
+        mapping_loader: MappingLoader | None = None,
         normalize_output: bool = True,
     ):
         """Initialize the Unicode converter.
@@ -213,13 +210,14 @@ class UnicodeConverter:
                 if preserve_unknown:
                     new_result.append(char)
                 else:
-                    new_result.append("\uFFFD")  # Unicode replacement character
+                    new_result.append("\ufffd")  # Unicode replacement character
 
         final_result = "".join(new_result)
 
         # Apply encoding-specific post-processing
         if mapping.encoding_name.lower() in ("shree-dev", "shree-dev-0714", "shree-dev-0708"):
             from legacylipi.mappings.shree_dev import apply_shree_dev_post_processing
+
             final_result = apply_shree_dev_post_processing(final_result)
 
         return final_result, unmapped
@@ -271,7 +269,7 @@ class UnicodeConverter:
     def convert_text_block(
         self,
         block: TextBlock,
-        encoding_name: Optional[str] = None,
+        encoding_name: str | None = None,
     ) -> TextBlock:
         """Convert a text block from legacy encoding to Unicode.
 
@@ -311,8 +309,8 @@ class UnicodeConverter:
     def convert_page(
         self,
         page: PDFPage,
-        encoding_name: Optional[str] = None,
-        page_encoding: Optional[EncodingDetectionResult] = None,
+        encoding_name: str | None = None,
+        page_encoding: EncodingDetectionResult | None = None,
     ) -> PDFPage:
         """Convert all text blocks on a page.
 
@@ -345,8 +343,8 @@ class UnicodeConverter:
     def convert_document(
         self,
         document: PDFDocument,
-        encoding_name: Optional[str] = None,
-        page_encodings: Optional[dict[int, EncodingDetectionResult]] = None,
+        encoding_name: str | None = None,
+        page_encodings: dict[int, EncodingDetectionResult] | None = None,
     ) -> PDFDocument:
         """Convert all text in a document.
 

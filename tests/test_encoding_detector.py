@@ -50,17 +50,31 @@ class TestEncodingDetectorInit:
 class TestFontNameDetection:
     """Tests for font name-based detection."""
 
-    def test_detect_shree_lipi_variants(self):
-        """Test detection of various Shree-Lipi font names."""
+    def test_detect_shree_dev_variants(self):
+        """Test detection of various Shree-Dev font names."""
         detector = EncodingDetector()
 
         test_fonts = [
             "Shree-Dev-0714",
             "ShreeDev0714",
             "SHREE_DEV_0702",
+            "shree dev 0705",
+        ]
+
+        for font_name in test_fonts:
+            result = detector.detect_from_font_name(font_name)
+            assert result is not None, f"Failed to detect: {font_name}"
+            assert result.detected_encoding == "shree-dev"
+            assert result.confidence >= 0.9
+            assert result.method == DetectionMethod.FONT_MATCH
+
+    def test_detect_shree_lipi_variants(self):
+        """Test detection of various Shree-Lipi font names."""
+        detector = EncodingDetector()
+
+        test_fonts = [
             "Shree-Lipi",
             "SDL-Dev",
-            "shree dev 0705",
         ]
 
         for font_name in test_fonts:
@@ -327,7 +341,7 @@ class TestFontListDetection:
 
         result = detector.detect_from_fonts(fonts)
         assert result is not None
-        assert result.detected_encoding == "shree-lipi"
+        assert result.detected_encoding == "shree-dev"
 
     def test_no_legacy_fonts_in_list(self):
         """Test when no legacy or Devanagari fonts are in the list."""
@@ -378,7 +392,7 @@ class TestTextBlockDetection:
         )
 
         result = detector.detect_from_text_block(block)
-        assert result.detected_encoding == "shree-lipi"
+        assert result.detected_encoding == "shree-dev"
         assert result.method == DetectionMethod.FONT_MATCH
 
     def test_detect_from_text_block_without_font(self):
@@ -440,7 +454,7 @@ class TestDocumentDetection:
 
         overall, page_results = detector.detect_from_document(doc)
 
-        assert overall.detected_encoding == "shree-lipi"
+        assert overall.detected_encoding == "shree-dev"
         assert overall.is_legacy
         assert len(page_results) == 2
         assert 1 in page_results
@@ -515,7 +529,7 @@ class TestDocumentDetection:
         overall, page_results = detector.detect_from_document(doc)
 
         # Should detect from document fonts
-        assert overall.detected_encoding == "shree-lipi"
+        assert overall.detected_encoding == "shree-dev"
 
 
 class TestConvenienceFunction:
@@ -524,7 +538,7 @@ class TestConvenienceFunction:
     def test_detect_with_font_name(self):
         """Test detection with font name."""
         result = detect_encoding(font_name="Shree-Dev-0714")
-        assert result.detected_encoding == "shree-lipi"
+        assert result.detected_encoding == "shree-dev"
 
     def test_detect_with_text(self):
         """Test detection with text."""
@@ -549,7 +563,7 @@ class TestConvenienceFunction:
         )
 
         result = detect_encoding(document=doc)
-        assert result.detected_encoding == "shree-lipi"
+        assert result.detected_encoding == "shree-dev"
 
     def test_detect_with_nothing(self):
         """Test detection with no input."""

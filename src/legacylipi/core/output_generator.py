@@ -7,7 +7,6 @@ including plain text, Markdown, PDF, and side-by-side bilingual documents.
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Union
 
 import fitz  # PyMuPDF
 
@@ -16,7 +15,6 @@ from legacylipi.core.models import (
     EncodingDetectionResult,
     OutputFormat,
     PDFDocument,
-    TextBlock,
     TranslationResult,
 )
 from legacylipi.core.utils.text_wrapper import TextWrapper
@@ -64,7 +62,7 @@ class OutputGenerator:
         self,
         document: PDFDocument,
         encoding_result: EncodingDetectionResult,
-        translation_result: Optional[TranslationResult] = None,
+        translation_result: TranslationResult | None = None,
     ) -> OutputMetadata:
         """Generate metadata for output files.
 
@@ -82,7 +80,9 @@ class OutputGenerator:
             encoding_confidence=encoding_result.confidence,
             source_language=translation_result.source_language if translation_result else "unknown",
             target_language=translation_result.target_language if translation_result else "unknown",
-            translation_backend=translation_result.translation_backend.value if translation_result else "none",
+            translation_backend=translation_result.translation_backend.value
+            if translation_result
+            else "none",
             generated_at=datetime.now().isoformat(),
             page_count=document.page_count,
         )
@@ -91,8 +91,8 @@ class OutputGenerator:
         self,
         document: PDFDocument,
         encoding_result: EncodingDetectionResult,
-        translation_result: Optional[TranslationResult] = None,
-        translated_text: Optional[str] = None,
+        translation_result: TranslationResult | None = None,
+        translated_text: str | None = None,
     ) -> str:
         """Generate plain text output.
 
@@ -153,7 +153,7 @@ Generated: {metadata.generated_at}"""
     def _format_text_with_pages(
         self,
         document: PDFDocument,
-        translation_result: Optional[TranslationResult],
+        translation_result: TranslationResult | None,
     ) -> str:
         """Format text with page markers.
 
@@ -178,8 +178,8 @@ Generated: {metadata.generated_at}"""
         self,
         document: PDFDocument,
         encoding_result: EncodingDetectionResult,
-        translation_result: Optional[TranslationResult] = None,
-        translated_text: Optional[str] = None,
+        translation_result: TranslationResult | None = None,
+        translated_text: str | None = None,
     ) -> str:
         """Generate Markdown output.
 
@@ -242,7 +242,7 @@ Generated: {metadata.generated_at}"""
     def _format_markdown_with_pages(
         self,
         document: PDFDocument,
-        translation_result: Optional[TranslationResult],
+        translation_result: TranslationResult | None,
     ) -> str:
         """Format content with Markdown page headers.
 
@@ -321,9 +321,9 @@ Generated: {metadata.generated_at}"""
         self,
         document: PDFDocument,
         encoding_result: EncodingDetectionResult,
-        translation_result: Optional[TranslationResult] = None,
-        translated_text: Optional[str] = None,
-        output_path: Optional[Path] = None,
+        translation_result: TranslationResult | None = None,
+        translated_text: str | None = None,
+        output_path: Path | None = None,
         preserve_structure: bool = True,
         structure_preserving_translation: bool = False,
     ) -> bytes:
@@ -370,14 +370,24 @@ Generated: {metadata.generated_at}"""
         if preserve_structure and translation_result is None and translated_text is None:
             # Generate PDF preserving original structure (extraction only)
             return self._generate_pdf_preserve_structure(
-                pdf_doc, document, metadata, translation_result,
-                translated_text, output_path, font_path
+                pdf_doc,
+                document,
+                metadata,
+                translation_result,
+                translated_text,
+                output_path,
+                font_path,
             )
         else:
             # Generate PDF with standard A4 layout (for translations or explicit request)
             return self._generate_pdf_a4_layout(
-                pdf_doc, document, metadata, translation_result,
-                translated_text, output_path, font_path
+                pdf_doc,
+                document,
+                metadata,
+                translation_result,
+                translated_text,
+                output_path,
+                font_path,
             )
 
     def _generate_pdf_preserve_structure(
@@ -385,10 +395,10 @@ Generated: {metadata.generated_at}"""
         pdf_doc: fitz.Document,
         document: PDFDocument,
         metadata: OutputMetadata,
-        translation_result: Optional[TranslationResult],
-        translated_text: Optional[str],
-        output_path: Optional[Path],
-        font_path: Optional[str],
+        translation_result: TranslationResult | None,
+        translated_text: str | None,
+        output_path: Path | None,
+        font_path: str | None,
     ) -> bytes:
         """Generate PDF preserving original page dimensions and text positions.
 
@@ -425,9 +435,7 @@ Generated: {metadata.generated_at}"""
             # Check if we have text blocks with positions
             if page_data.text_blocks and any(b.position for b in page_data.text_blocks):
                 # Place text blocks at their original positions
-                self._place_text_blocks_with_positions(
-                    new_page, page_data.text_blocks, font_path
-                )
+                self._place_text_blocks_with_positions(new_page, page_data.text_blocks, font_path)
             else:
                 # Fallback to simple text layout if no position data
                 margin = min(50, page_width * 0.08)
@@ -438,8 +446,13 @@ Generated: {metadata.generated_at}"""
                 if self._include_page_numbers:
                     header_text = f"Page {page_data.page_number}"
                     self._insert_text_with_font(
-                        new_page, margin, y_position, header_text,
-                        9, font_path, color=(0.5, 0.5, 0.5)
+                        new_page,
+                        margin,
+                        y_position,
+                        header_text,
+                        9,
+                        font_path,
+                        color=(0.5, 0.5, 0.5),
                     )
                     y_position += line_height * 2
 
@@ -454,9 +467,7 @@ Generated: {metadata.generated_at}"""
                         new_page = pdf_doc.new_page(width=page_width, height=page_height)
                         y_position = margin
 
-                    self._insert_text_with_font(
-                        new_page, margin, y_position, line, 11, font_path
-                    )
+                    self._insert_text_with_font(new_page, margin, y_position, line, 11, font_path)
                     y_position += line_height
 
         # Get PDF bytes
@@ -473,7 +484,7 @@ Generated: {metadata.generated_at}"""
         self,
         page: fitz.Page,
         text_blocks: list,
-        font_path: Optional[str],
+        font_path: str | None,
     ) -> None:
         """Place text blocks at their original positions on a page.
 
@@ -501,9 +512,7 @@ Generated: {metadata.generated_at}"""
             font_size = block.font_size if 4 <= block.font_size <= 72 else 12
 
             # Insert text at original position
-            self._insert_text_with_font(
-                page, x, y, text.strip(), font_size, font_path
-            )
+            self._insert_text_with_font(page, x, y, text.strip(), font_size, font_path)
 
     def _calculate_block_font_size(
         self,
@@ -513,7 +522,7 @@ Generated: {metadata.generated_at}"""
         original_font_size: float,
         min_font_size: float = 5.0,
         max_font_size: float = 12.0,
-        font_path: Optional[str] = None,
+        font_path: str | None = None,
     ) -> float:
         """Calculate font size that fits text within a bounding box.
 
@@ -536,8 +545,12 @@ Generated: {metadata.generated_at}"""
         """
         wrapper = self._get_text_wrapper(font_path)
         return wrapper.calculate_block_font_size(
-            text, available_width, available_height,
-            original_font_size, min_font_size, max_font_size
+            text,
+            available_width,
+            available_height,
+            original_font_size,
+            min_font_size,
+            max_font_size,
         )
 
     def _wrap_text_to_width_precise(
@@ -545,7 +558,7 @@ Generated: {metadata.generated_at}"""
         text: str,
         max_width: float,
         font_size: float,
-        font: Optional[fitz.Font] = None,
+        font: fitz.Font | None = None,
     ) -> list[str]:
         """Wrap text using font metrics for precise measurement.
 
@@ -589,30 +602,32 @@ Generated: {metadata.generated_at}"""
         for block, text in blocks:
             # Store original bbox and create adjustment info
             bbox = block.position
-            adjusted_blocks.append({
-                'block': block,
-                'text': text,
-                'orig_y0': bbox.y0,
-                'orig_y1': bbox.y1,
-                'adj_y0': bbox.y0,  # Will be adjusted if overlap detected
-                'x0': bbox.x0,
-                'x1': bbox.x1,
-            })
+            adjusted_blocks.append(
+                {
+                    "block": block,
+                    "text": text,
+                    "orig_y0": bbox.y0,
+                    "orig_y1": bbox.y1,
+                    "adj_y0": bbox.y0,  # Will be adjusted if overlap detected
+                    "x0": bbox.x0,
+                    "x1": bbox.x1,
+                }
+            )
 
         # Sort by y0 first, then x0 (top-to-bottom, left-to-right)
-        adjusted_blocks.sort(key=lambda b: (b['orig_y0'], b['x0']))
+        adjusted_blocks.sort(key=lambda b: (b["orig_y0"], b["x0"]))
 
         # Track occupied regions: list of (y_end, x0, x1)
         occupied = []
 
-        for i, item in enumerate(adjusted_blocks):
+        for _i, item in enumerate(adjusted_blocks):
             # Check for overlap with all previously processed blocks
-            intended_y0 = item['orig_y0']
+            intended_y0 = item["orig_y0"]
             min_y0 = intended_y0
 
-            for (occ_y_end, occ_x0, occ_x1) in occupied:
+            for occ_y_end, occ_x0, occ_x1 in occupied:
                 # Check horizontal overlap
-                if not (item['x1'] < occ_x0 or item['x0'] > occ_x1):
+                if not (item["x1"] < occ_x0 or item["x0"] > occ_x1):
                     # Horizontal overlap exists
                     # Check if current block starts before occupied region ends
                     if intended_y0 < occ_y_end + gap:
@@ -621,14 +636,14 @@ Generated: {metadata.generated_at}"""
                             min_y0 = occ_y_end + gap
 
             # Apply adjustment
-            item['adj_y0'] = min_y0
+            item["adj_y0"] = min_y0
 
             # Calculate adjusted y1 (maintain original height)
-            height = item['orig_y1'] - item['orig_y0']
+            height = item["orig_y1"] - item["orig_y0"]
             adj_y1 = min_y0 + height
 
             # Record this block's occupied region
-            occupied.append((adj_y1, item['x0'], item['x1']))
+            occupied.append((adj_y1, item["x0"], item["x1"]))
 
         # Return adjusted blocks with modified position info
         # We need to create new BoundingBox objects with adjusted y values
@@ -636,22 +651,23 @@ Generated: {metadata.generated_at}"""
 
         result = []
         for item in adjusted_blocks:
-            block = item['block']
-            text = item['text']
+            block = item["block"]
+            text = item["text"]
 
             # If position was adjusted, create a modified block
-            if item['adj_y0'] != item['orig_y0']:
+            if item["adj_y0"] != item["orig_y0"]:
                 # Create adjusted bounding box
-                height = item['orig_y1'] - item['orig_y0']
+                height = item["orig_y1"] - item["orig_y0"]
                 adjusted_bbox = BoundingBox(
                     x0=block.position.x0,
-                    y0=item['adj_y0'],
+                    y0=item["adj_y0"],
                     x1=block.position.x1,
-                    y1=item['adj_y0'] + height,
+                    y1=item["adj_y0"] + height,
                 )
                 # Create a copy of the block with adjusted position
                 # We use dataclasses.replace if available, otherwise manual copy
                 from dataclasses import replace
+
                 adjusted_block = replace(block, position=adjusted_bbox)
                 result.append((adjusted_block, text))
             else:
@@ -663,10 +679,10 @@ Generated: {metadata.generated_at}"""
         self,
         page: fitz.Page,
         text_blocks: list,
-        font_path: Optional[str],
+        font_path: str | None,
         min_font_size: float = 5.0,
         padding: float = 2.0,
-        font_analyzer: Optional[FontSizeAnalyzer] = None,
+        font_analyzer: FontSizeAnalyzer | None = None,
     ) -> None:
         """Place translated text blocks at original positions with font scaling.
 
@@ -740,14 +756,14 @@ Generated: {metadata.generated_at}"""
             )
 
             line_height = font_size * 1.2
-            total_text_height = len(wrapped_lines) * line_height
+            len(wrapped_lines) * line_height
 
             # Calculate starting Y position, checking for collisions
             intended_y_start = bbox.y0 + padding
 
             # Find the lowest occupied region that overlaps horizontally with this block
             min_y_start = intended_y_start
-            for (occupied_y_end, occupied_x0, occupied_x1) in occupied_regions:
+            for occupied_y_end, occupied_x0, occupied_x1 in occupied_regions:
                 # Check if there's horizontal overlap
                 if not (bbox.x1 < occupied_x0 or bbox.x0 > occupied_x1):
                     # Horizontal overlap exists - ensure we start below this region
@@ -771,10 +787,7 @@ Generated: {metadata.generated_at}"""
                 if y > page_height - padding:
                     break
 
-                self._insert_text_with_font(
-                    page, x, y, line.strip(),
-                    font_size, font_path
-                )
+                self._insert_text_with_font(page, x, y, line.strip(), font_size, font_path)
                 y += line_height
                 final_y = y  # Update to track where we actually ended
                 lines_rendered += 1
@@ -791,8 +804,8 @@ Generated: {metadata.generated_at}"""
         pdf_doc: fitz.Document,
         document: PDFDocument,
         metadata: OutputMetadata,
-        output_path: Optional[Path],
-        font_path: Optional[str],
+        output_path: Path | None,
+        font_path: str | None,
     ) -> bytes:
         """Generate PDF with translated text at original block positions.
 
@@ -846,8 +859,7 @@ Generated: {metadata.generated_at}"""
 
             if positioned_blocks:
                 self._place_translated_blocks_with_positions(
-                    new_page, positioned_blocks, font_path,
-                    font_analyzer=font_analyzer
+                    new_page, positioned_blocks, font_path, font_analyzer=font_analyzer
                 )
             else:
                 # Fallback: render as flowing text if no position data
@@ -874,10 +886,10 @@ Generated: {metadata.generated_at}"""
         pdf_doc: fitz.Document,
         document: PDFDocument,
         metadata: OutputMetadata,
-        translation_result: Optional[TranslationResult],
-        translated_text: Optional[str],
-        output_path: Optional[Path],
-        font_path: Optional[str],
+        translation_result: TranslationResult | None,
+        translated_text: str | None,
+        output_path: Path | None,
+        font_path: str | None,
     ) -> bytes:
         """Generate PDF preserving page structure from source document.
 
@@ -917,14 +929,28 @@ Generated: {metadata.generated_at}"""
         if has_page_markers and num_pages > 0:
             # Page-by-page rendering preserving structure
             return self._generate_pdf_page_by_page(
-                pdf_doc, document, metadata, full_text,
-                output_path, font_path, margin, base_font_size, header_font_size
+                pdf_doc,
+                document,
+                metadata,
+                full_text,
+                output_path,
+                font_path,
+                margin,
+                base_font_size,
+                header_font_size,
             )
         else:
             # Fallback to flowing A4 layout
             return self._generate_pdf_flowing_layout(
-                pdf_doc, document, metadata, full_text,
-                output_path, font_path, margin, base_font_size, header_font_size
+                pdf_doc,
+                document,
+                metadata,
+                full_text,
+                output_path,
+                font_path,
+                margin,
+                base_font_size,
+                header_font_size,
             )
 
     def _generate_pdf_page_by_page(
@@ -933,8 +959,8 @@ Generated: {metadata.generated_at}"""
         document: PDFDocument,
         metadata: OutputMetadata,
         full_text: str,
-        output_path: Optional[Path],
-        font_path: Optional[str],
+        output_path: Path | None,
+        font_path: str | None,
         margin: float,
         base_font_size: float,
         header_font_size: float,
@@ -981,8 +1007,13 @@ Generated: {metadata.generated_at}"""
             if self._include_page_numbers:
                 header_text = f"Page {i + 1}"
                 self._insert_text_with_font(
-                    new_page, margin, y_position, header_text,
-                    header_font_size, font_path, color=(0.5, 0.5, 0.5)
+                    new_page,
+                    margin,
+                    y_position,
+                    header_text,
+                    header_font_size,
+                    font_path,
+                    color=(0.5, 0.5, 0.5),
                 )
                 y_position += line_height * 1.5
 
@@ -998,8 +1029,7 @@ Generated: {metadata.generated_at}"""
                     break
 
                 self._insert_text_with_font(
-                    new_page, margin, y_position, line,
-                    font_size, font_path
+                    new_page, margin, y_position, line, font_size, font_path
                 )
                 y_position += line_height
 
@@ -1018,8 +1048,8 @@ Generated: {metadata.generated_at}"""
         document: PDFDocument,
         metadata: OutputMetadata,
         full_text: str,
-        output_path: Optional[Path],
-        font_path: Optional[str],
+        output_path: Path | None,
+        font_path: str | None,
         margin: float,
         font_size: float,
         header_font_size: float,
@@ -1048,8 +1078,13 @@ Generated: {metadata.generated_at}"""
         if self._include_page_numbers:
             header_text = f"Page {page_number}"
             self._insert_text_with_font(
-                new_page, margin, y_position, header_text,
-                header_font_size, font_path, color=(0.5, 0.5, 0.5)
+                new_page,
+                margin,
+                y_position,
+                header_text,
+                header_font_size,
+                font_path,
+                color=(0.5, 0.5, 0.5),
             )
             y_position += line_height * 2
 
@@ -1065,16 +1100,18 @@ Generated: {metadata.generated_at}"""
                 if self._include_page_numbers:
                     header_text = f"Page {page_number}"
                     self._insert_text_with_font(
-                        new_page, margin, y_position, header_text,
-                        header_font_size, font_path, color=(0.5, 0.5, 0.5)
+                        new_page,
+                        margin,
+                        y_position,
+                        header_text,
+                        header_font_size,
+                        font_path,
+                        color=(0.5, 0.5, 0.5),
                     )
                     y_position += line_height * 2
 
             # Insert text with proper font
-            self._insert_text_with_font(
-                new_page, margin, y_position, line,
-                font_size, font_path
-            )
+            self._insert_text_with_font(new_page, margin, y_position, line, font_size, font_path)
             y_position += line_height
 
         # Get PDF bytes
@@ -1093,7 +1130,7 @@ Generated: {metadata.generated_at}"""
         y: float,
         text: str,
         fontsize: float,
-        font_path: Optional[str],
+        font_path: str | None,
         color: tuple = (0, 0, 0),
     ) -> None:
         """Insert text with proper font support using TextWriter for Unicode.
@@ -1123,7 +1160,7 @@ Generated: {metadata.generated_at}"""
                 color=color,
             )
 
-    def _get_unicode_font(self) -> Optional[str]:
+    def _get_unicode_font(self) -> str | None:
         """Find a font that supports Unicode/Devanagari on the system.
 
         Returns:
@@ -1247,7 +1284,7 @@ Generated: {metadata.generated_at}"""
         metadata: OutputMetadata,
         margin: float,
         font_size: float,
-        font_path: Optional[str] = None,
+        font_path: str | None = None,
     ) -> None:
         """Add metadata information to a PDF page.
 
@@ -1263,9 +1300,13 @@ Generated: {metadata.generated_at}"""
 
         # Title
         self._insert_text_with_font(
-            page, margin, y_position,
+            page,
+            margin,
+            y_position,
             "LegacyLipi Translation Output",
-            16, font_path, color=(0, 0, 0)
+            16,
+            font_path,
+            color=(0, 0, 0),
         )
         y_position += line_height * 2
 
@@ -1281,8 +1322,7 @@ Generated: {metadata.generated_at}"""
 
         for line in meta_lines:
             self._insert_text_with_font(
-                page, margin, y_position,
-                line, font_size, font_path, color=(0.3, 0.3, 0.3)
+                page, margin, y_position, line, font_size, font_path, color=(0.3, 0.3, 0.3)
             )
             y_position += line_height
 
@@ -1320,10 +1360,10 @@ Generated: {metadata.generated_at}"""
         self,
         document: PDFDocument,
         encoding_result: EncodingDetectionResult,
-        translation_result: Optional[TranslationResult] = None,
+        translation_result: TranslationResult | None = None,
         output_format: OutputFormat = OutputFormat.TEXT,
-        translated_text: Optional[str] = None,
-    ) -> Union[str, bytes]:
+        translated_text: str | None = None,
+    ) -> str | bytes:
         """Generate output in the specified format.
 
         Args:
@@ -1348,15 +1388,13 @@ Generated: {metadata.generated_at}"""
                 document, encoding_result, translation_result, translated_text
             )
         elif output_format == OutputFormat.PDF:
-            return self.generate_pdf(
-                document, encoding_result, translation_result, translated_text
-            )
+            return self.generate_pdf(document, encoding_result, translation_result, translated_text)
         else:
             raise ValueError(f"Unsupported output format: {output_format}")
 
     def save(
         self,
-        content: Union[str, bytes],
+        content: str | bytes,
         output_path: Path,
     ) -> None:
         """Save content to a file.
@@ -1374,7 +1412,7 @@ Generated: {metadata.generated_at}"""
 def generate_output(
     document: PDFDocument,
     encoding_result: EncodingDetectionResult,
-    translation_result: Optional[TranslationResult] = None,
+    translation_result: TranslationResult | None = None,
     output_format: OutputFormat = OutputFormat.TEXT,
 ) -> str:
     """Convenience function to generate output.
@@ -1389,6 +1427,4 @@ def generate_output(
         Formatted output string.
     """
     generator = OutputGenerator()
-    return generator.generate(
-        document, encoding_result, translation_result, output_format
-    )
+    return generator.generate(document, encoding_result, translation_result, output_format)
