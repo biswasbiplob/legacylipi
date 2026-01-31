@@ -44,6 +44,27 @@ except ImportError:
     EASYOCR_AVAILABLE = False
 
 
+def detect_gpu_backend() -> tuple[bool, str]:
+    """Detect available GPU backend for EasyOCR/PyTorch.
+
+    Checks for CUDA (NVIDIA) and MPS (Apple Silicon) backends.
+
+    Returns:
+        Tuple of (gpu_available, backend_name) where backend_name is
+        "cuda", "mps", or "cpu".
+    """
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return True, "cuda"
+        # Check for Apple Silicon MPS (Metal Performance Shaders)
+        if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            return True, "mps"
+    except ImportError:
+        pass
+    return False, "cpu"
+
+
 class OCRError(Exception):
     """Exception raised when OCR processing fails."""
     pass
@@ -974,7 +995,7 @@ class EasyOCRParser:
         filepath: Path | str,
         lang: str = "mr",
         dpi: int = DEFAULT_DPI,
-        gpu: bool = False,  # Set True if you have CUDA GPU
+        gpu: bool | str = "auto",  # "auto" detects CUDA/MPS, or explicit True/False
     ):
         """Initialize the EasyOCR parser.
 
@@ -982,7 +1003,10 @@ class EasyOCRParser:
             filepath: Path to the PDF file.
             lang: Language code (e.g., 'mr' for Marathi, 'hi' for Hindi).
             dpi: DPI for rendering PDF pages to images.
-            gpu: Whether to use GPU acceleration (requires CUDA).
+            gpu: GPU acceleration mode:
+                - "auto": Auto-detect CUDA (NVIDIA) or MPS (Apple Silicon)
+                - True: Force GPU usage
+                - False: Force CPU usage
 
         Raises:
             OCRError: If file doesn't exist, isn't a PDF, or EasyOCR unavailable.
@@ -1003,11 +1027,22 @@ class EasyOCRParser:
         lang_lower = lang.lower()
         self.languages = self.LANGUAGE_CODES.get(lang_lower, ['en'])
         self.dpi = dpi
-        self.gpu = gpu
+
+        # Auto-detect GPU backend
+        if gpu == "auto":
+            gpu_available, backend = detect_gpu_backend()
+            self.gpu = gpu_available
+            self._gpu_backend = backend
+        else:
+            self.gpu = bool(gpu)
+            self._gpu_backend = "cuda" if self.gpu else "cpu"
 
         # Initialize EasyOCR reader (lazy - downloads models on first use)
         try:
-            self._reader = easyocr.Reader(self.languages, gpu=gpu)
+            import logging
+            ocr_logger = logging.getLogger(__name__)
+            ocr_logger.info(f"Initializing EasyOCR with GPU={self.gpu} (backend: {self._gpu_backend})")
+            self._reader = easyocr.Reader(self.languages, gpu=self.gpu)
         except Exception as e:
             raise OCRError(f"Failed to initialize EasyOCR: {e}")
 
@@ -1281,7 +1316,7 @@ def parse_pdf_with_easyocr(
     filepath: Path | str,
     lang: str = "mr",
     dpi: int = 300,
-    gpu: bool = False,
+    gpu: bool | str = "auto",
     password: Optional[str] = None
 ) -> PDFDocument:
     """Parse a PDF using EasyOCR - completely FREE, no API keys needed.
@@ -1293,7 +1328,10 @@ def parse_pdf_with_easyocr(
         filepath: Path to the PDF file.
         lang: Language code (e.g., 'mr' for Marathi, 'hi' for Hindi).
         dpi: DPI for rendering (higher = better quality but slower).
-        gpu: Use GPU acceleration if available (requires CUDA).
+        gpu: GPU acceleration mode:
+            - "auto" (default): Auto-detect CUDA (NVIDIA) or MPS (Apple Silicon)
+            - True: Force GPU usage
+            - False: Force CPU usage
         password: Password for encrypted PDFs.
 
     Returns:
@@ -1301,6 +1339,7 @@ def parse_pdf_with_easyocr(
 
     Note:
         First run downloads language models (~100MB per language).
+        On Apple Silicon Macs, MPS acceleration is automatically enabled.
     """
     with EasyOCRParser(filepath, lang=lang, dpi=dpi, gpu=gpu) as parser:
         return parser.parse(password)

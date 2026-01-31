@@ -458,9 +458,9 @@ class TranslationUI:
 
             try:
                 # Step 1: Parse PDF
-                self.progress_bar.set_value(0.1)
-                self.progress_label.set_text("10%")
-                self.status_label.set_text("Parsing PDF...")
+                self._safe_ui_update(lambda: self.progress_bar.set_value(0.1))
+                self._safe_ui_update(lambda: self.progress_label.set_text("10%"))
+                self._safe_ui_update(lambda: self.status_label.set_text("Parsing PDF..."))
                 await asyncio.sleep(0.1)  # Allow UI to update
 
                 # Get event loop for running blocking operations
@@ -471,7 +471,7 @@ class TranslationUI:
                     if self.ocr_engine == "easyocr":
                         from legacylipi.core.ocr_parser import parse_pdf_with_easyocr
 
-                        self.status_label.set_text("Running EasyOCR (first run downloads models)...")
+                        self._safe_ui_update(lambda: self.status_label.set_text("Running EasyOCR (first run downloads models)..."))
                         # Run EasyOCR in executor to avoid blocking the event loop
                         document = await loop.run_in_executor(
                             None,
@@ -480,7 +480,7 @@ class TranslationUI:
                     else:
                         from legacylipi.core.ocr_parser import parse_pdf_with_ocr
 
-                        self.status_label.set_text("Running Tesseract OCR...")
+                        self._safe_ui_update(lambda: self.status_label.set_text("Running Tesseract OCR..."))
                         # Run Tesseract in executor to avoid blocking the event loop
                         document = await loop.run_in_executor(
                             None,
@@ -498,9 +498,9 @@ class TranslationUI:
                     document = await loop.run_in_executor(None, lambda: parse_pdf(input_path))
 
                     # Step 2: Detect encoding
-                    self.progress_bar.set_value(0.2)
-                    self.progress_label.set_text("20%")
-                    self.status_label.set_text("Detecting encoding...")
+                    self._safe_ui_update(lambda: self.progress_bar.set_value(0.2))
+                    self._safe_ui_update(lambda: self.progress_label.set_text("20%"))
+                    self._safe_ui_update(lambda: self.status_label.set_text("Detecting encoding..."))
                     await asyncio.sleep(0.1)
 
                     detector = EncodingDetector()
@@ -511,9 +511,9 @@ class TranslationUI:
                     )
 
                     # Step 3: Convert to Unicode
-                    self.progress_bar.set_value(0.3)
-                    self.progress_label.set_text("30%")
-                    self.status_label.set_text("Converting to Unicode...")
+                    self._safe_ui_update(lambda: self.progress_bar.set_value(0.3))
+                    self._safe_ui_update(lambda: self.progress_label.set_text("30%"))
+                    self._safe_ui_update(lambda: self.status_label.set_text("Converting to Unicode..."))
                     await asyncio.sleep(0.1)
 
                     converter = UnicodeConverter()
@@ -524,9 +524,9 @@ class TranslationUI:
                     )
 
                 # Step 4: Translate
-                self.progress_bar.set_value(0.4)
-                self.progress_label.set_text("40%")
-                self.status_label.set_text(f"Translating with {self.translator}...")
+                self._safe_ui_update(lambda: self.progress_bar.set_value(0.4))
+                self._safe_ui_update(lambda: self.progress_label.set_text("40%"))
+                self._safe_ui_update(lambda: self.status_label.set_text(f"Translating with {self.translator}..."))
                 await asyncio.sleep(0.1)
 
                 # Build translator kwargs
@@ -568,7 +568,7 @@ class TranslationUI:
                     if all_blocks:
                         total_blocks = len(all_blocks)
                         logger.info(f"Structure-preserving mode: {total_blocks} blocks to translate")
-                        self.status_label.set_text(f"Translating {total_blocks} text blocks...")
+                        self._safe_ui_update(lambda: self.status_label.set_text(f"Translating {total_blocks} text blocks..."))
 
                         # Progress callback for block translation - queues updates instead of direct UI calls
                         # This prevents WebSocket disconnection from concurrent callback bursts
