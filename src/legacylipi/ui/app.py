@@ -57,7 +57,7 @@ TRANSLATION_MODES = {
     "flowing": "Flowing Text (Standard)",
 }
 
-OPENAI_MODELS = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"]
+OPENAI_MODELS = ["gpt-5.2", "gpt-5.1", "gpt-5", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo"]
 OLLAMA_MODELS = ["llama3.2", "llama3.1", "llama2", "mistral", "phi", "gemma"]
 
 
