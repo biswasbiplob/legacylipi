@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # Only run after CI passes
+    needs: []
+
+    permissions:
+      contents: write  # Required for creating releases
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for changelog generation
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Extract version from pyproject.toml
+        id: version
+        run: |
+          VERSION=$(grep -E "^version = " pyproject.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if release already exists
+        id: check_release
+        run: |
+          if gh release view "v${{ steps.version.outputs.version }}" > /dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build package
+        if: steps.check_release.outputs.exists == 'false'
+        run: uv build
+
+      - name: Generate release notes
+        if: steps.check_release.outputs.exists == 'false'
+        id: release_notes
+        run: |
+          # Get commits since last tag
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          if [ -n "$LAST_TAG" ]; then
+            COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s" --no-merges)
+          else
+            COMMITS=$(git log -20 --pretty=format:"- %s" --no-merges)
+          fi
+
+          # Create release notes
+          cat << EOF > release_notes.md
+          ## LegacyLipi v${{ steps.version.outputs.version }}
+
+          ### Changes
+          ${COMMITS}
+
+          ### Installation
+          \`\`\`bash
+          pip install legacylipi-${{ steps.version.outputs.version }}-py3-none-any.whl
+          \`\`\`
+
+          Or install from PyPI:
+          \`\`\`bash
+          pip install legacylipi==${{ steps.version.outputs.version }}
+          \`\`\`
+          EOF
+
+      - name: Create GitHub Release
+        if: steps.check_release.outputs.exists == 'false'
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" \
+            dist/legacylipi-${{ steps.version.outputs.version }}-py3-none-any.whl \
+            dist/legacylipi-${{ steps.version.outputs.version }}.tar.gz \
+            --title "v${{ steps.version.outputs.version }}" \
+            --notes-file release_notes.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Skip release (already exists)
+        if: steps.check_release.outputs.exists == 'true'
+        run: |
+          echo "Release v${{ steps.version.outputs.version }} already exists, skipping."
