@@ -118,7 +118,8 @@ uv run legacylipi translate input.pdf --translator openai --model gpt-4o
 |-------|-------------|
 | `gpt-4o-mini` | Fast and cost-effective (default) |
 | `gpt-4o` | Most capable, best for complex translations |
-| `gpt-3.5-turbo` | Faster, lower cost |
+| `gpt-4-turbo` | High quality with faster response |
+| `gpt-4.5-preview` | Latest preview model |
 
 ---
 

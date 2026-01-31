@@ -217,24 +217,51 @@ Shows the current month, characters used, free tier limit, remaining quota, and 
 
 ---
 
+## OCR Backends
+
+LegacyLipi supports multiple OCR backends:
+
+| Backend | Description | Setup | GPU Support |
+|---------|-------------|-------|-------------|
+| Tesseract | Local, free, most language packs | `apt install tesseract-ocr` | CPU only |
+| Google Vision | Cloud, best accuracy for Indian languages | GCP credentials required | N/A (cloud) |
+| EasyOCR | Local, free, good accuracy | `uv sync --extra easyocr` | CUDA, MPS |
+
+### GPU Acceleration (EasyOCR)
+
+EasyOCR automatically detects and uses available GPU:
+- **CUDA** (NVIDIA GPUs) - Requires PyTorch with CUDA support
+- **MPS** (Apple Silicon) - Requires PyTorch with MPS support
+- **CPU** - Fallback when no GPU available
+
+Check GPU detection:
+```bash
+uv run python -c "from legacylipi.core.ocr_parser import detect_gpu_backend; print(detect_gpu_backend())"
+```
+
+---
+
 ## OCR Language Codes
 
-| Language | Code | Tesseract Package |
-|----------|------|-------------------|
-| Marathi | `mar` | `tesseract-ocr-mar` |
-| Hindi | `hin` | `tesseract-ocr-hin` |
-| English | `eng` | `tesseract-ocr-eng` |
-| Tamil | `tam` | `tesseract-ocr-tam` |
-| Telugu | `tel` | `tesseract-ocr-tel` |
-| Kannada | `kan` | `tesseract-ocr-kan` |
-| Malayalam | `mal` | `tesseract-ocr-mal` |
-| Gujarati | `guj` | `tesseract-ocr-guj` |
-| Bengali | `ben` | `tesseract-ocr-ben` |
-| Punjabi | `pan` | `tesseract-ocr-pan` |
+| Language | Code | Tesseract Package | EasyOCR |
+|----------|------|-------------------|---------|
+| Marathi | `mar` | `tesseract-ocr-mar` | `mr` |
+| Hindi | `hin` | `tesseract-ocr-hin` | `hi` |
+| English | `eng` | `tesseract-ocr-eng` | `en` |
+| Tamil | `tam` | `tesseract-ocr-tam` | `ta` |
+| Telugu | `tel` | `tesseract-ocr-tel` | `te` |
+| Kannada | `kan` | `tesseract-ocr-kan` | `kn` |
+| Malayalam | `mal` | `tesseract-ocr-mal` | `ml` |
+| Gujarati | `guj` | `tesseract-ocr-guj` | `gu` |
+| Bengali | `ben` | `tesseract-ocr-ben` | `bn` |
+| Punjabi | `pan` | `tesseract-ocr-pan` | `pa` |
+
+---
 
 ## OCR Tips
 
 1. **Higher DPI = Better accuracy** (but slower): Use `--ocr-dpi 600` for poor quality scans
 2. **Pre-process images**: Clean, high-contrast scans work best
 3. **Language matters**: Always specify the correct `--ocr-lang` for best results
-4. **Combine with translation**: OCR extracts original text, then translate as usual
+4. **GPU acceleration**: Use EasyOCR with CUDA/MPS for faster processing on large documents
+5. **Combine with translation**: OCR extracts original text, then translate as usual

@@ -4,7 +4,7 @@ Guide for contributing to LegacyLipi development.
 
 ## Prerequisites
 
-- Python 3.10+
+- Python 3.12+
 - [uv](https://github.com/astral-sh/uv) package manager
 
 ## Setup
@@ -39,6 +39,22 @@ uv run pytest -m "not slow"
 
 ## Code Quality
 
+### Pre-commit Checks (Recommended)
+
+Always run the pre-commit check script before committing:
+
+```bash
+./scripts/check.sh
+```
+
+This runs all checks that CI will run:
+1. Code formatting (ruff format)
+2. Linting (ruff check)
+3. Type checking (mypy)
+4. Tests (pytest)
+
+### Individual Commands
+
 ```bash
 # Run linter
 uv run ruff check src/ tests/
@@ -50,6 +66,15 @@ uv run ruff check --fix src/ tests/
 uv run mypy src/legacylipi/
 ```
 
+### CI Pipeline
+
+The project uses GitHub Actions for CI. On every PR and push to main:
+- Tests run on Python 3.12 and 3.13
+- Linting and type checking are enforced
+- Package build is verified
+
+When a PR merges to main, a release is automatically created if the version in `pyproject.toml` has changed.
+
 ## Project Structure
 
 ```
@@ -59,13 +84,15 @@ src/legacylipi/
 ├── core/
 │   ├── models.py            # Data models (PDFDocument, TextBlock, etc.)
 │   ├── pdf_parser.py        # PDF parsing with PyMuPDF
-│   ├── ocr_parser.py        # OCR-based PDF text extraction (Tesseract)
+│   ├── ocr_parser.py        # OCR-based PDF text extraction (Tesseract, Google Vision, EasyOCR)
 │   ├── encoding_detector.py # Legacy font detection
 │   ├── unicode_converter.py # Legacy-to-Unicode conversion
 │   ├── translator.py        # Translation backends
 │   ├── output_generator.py  # Text/Markdown/PDF output generation
+│   ├── font_analyzer.py     # Font size analysis and normalization
 │   └── utils/
-│       └── usage_tracker.py # API usage tracking with monthly limits
+│       ├── usage_tracker.py # API usage tracking with monthly limits
+│       └── text_wrapper.py  # Text wrapping utilities for PDF generation
 ├── mappings/
 │   └── loader.py            # Font mapping tables
 ├── ui/

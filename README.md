@@ -34,6 +34,15 @@ uv sync --all-extras
 
 ### OCR Support (Optional)
 
+LegacyLipi supports multiple OCR backends:
+
+| Backend | Description | GPU Support |
+|---------|-------------|-------------|
+| Tesseract | Local, free, most language packs | CPU only |
+| Google Vision | Cloud, paid, best accuracy | N/A |
+| EasyOCR | Local, free, good for Indian languages | CUDA, MPS (Apple Silicon) |
+
+**Tesseract (default):**
 ```bash
 # Ubuntu/Debian
 sudo apt-get install tesseract-ocr tesseract-ocr-mar tesseract-ocr-hin
@@ -42,7 +51,21 @@ sudo apt-get install tesseract-ocr tesseract-ocr-mar tesseract-ocr-hin
 brew install tesseract tesseract-lang
 ```
 
-See [docs/cli-reference.md](docs/cli-reference.md) for Windows instructions and language codes.
+**EasyOCR with GPU (optional):**
+```bash
+# Install with EasyOCR support
+uv sync --extra easyocr
+
+# For GPU acceleration, install PyTorch with CUDA or MPS support
+```
+
+**Google Vision (optional):**
+```bash
+uv sync --extra vision
+# Requires GCP credentials (GOOGLE_APPLICATION_CREDENTIALS)
+```
+
+See [docs/cli-reference.md](docs/cli-reference.md) for detailed OCR options and language codes.
 
 ## Quick Start
 
