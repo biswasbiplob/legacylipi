@@ -125,12 +125,56 @@ See [docs/cli-reference.md](docs/cli-reference.md) for full command reference.
 
 ## Development
 
-See [docs/development.md](docs/development.md) for:
-- Setup instructions
-- Running tests
-- Project structure
-- Adding new encodings
-- Architecture diagram
+See [docs/development.md](docs/development.md) for setup instructions, running tests, project structure, and adding new encodings.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                              LegacyLipi                                 │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │                      Text Extraction                             │   │
+│  │  ┌──────────────┐              ┌──────────────┐                  │   │
+│  │  │   PDF        │    OR        │   OCR        │                  │   │
+│  │  │   Parser     │              │   Parser     │                  │   │
+│  │  │ (font-based) │              │ (Tesseract)  │                  │   │
+│  │  └──────────────┘              └──────────────┘                  │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│         │                                │                              │
+│         ▼                                ▼                              │
+│  ┌──────────────┐    ┌──────────────┐                                   │
+│  │   Encoding   │───▶│   Unicode    │◀──── (OCR output is               │
+│  │   Detector   │    │   Converter  │       already Unicode)            │
+│  └──────────────┘    └──────────────┘                                   │
+│                             │                                           │
+│                             ▼                                           │
+│         ┌───────────────────────────────────────────────────────────┐   │
+│         │                 Translation Engine                        │   │
+│         │  ┌────────┬────────┬──────────┬────────┬────────┬─────┐   │   │
+│         │  │ trans  │ Google │ MyMemory │ Ollama │ OpenAI │ GCP │   │   │
+│         │  │ (CLI)  │ Trans. │  (API)   │(Local) │ (API)  │Cloud│   │   │
+│         │  └────────┴────────┴──────────┴────────┴────────┴─────┘   │   │
+│         └───────────────────────────────────────────────────────────┘   │
+│                             │                                           │
+│                             ▼                                           │
+│         ┌───────────────────────────────────────────────┐               │
+│         │            Output Generator                   │               │
+│         │  ┌──────┬────────┬───────┐                    │               │
+│         │  │ .txt │  .md   │ .pdf  │                    │               │
+│         │  └──────┴────────┴───────┘                    │               │
+│         └───────────────────────────────────────────────┘               │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Pipeline Flow:**
+1. **Parse PDF** → Extract text with PDF parser or OCR
+2. **Detect Encoding** → Identify legacy encoding scheme
+3. **Convert to Unicode** → Transform legacy text to Unicode
+4. **Translate** → Use translation backend
+5. **Generate Output** → Create PDF/text/markdown
 
 ## License
 
