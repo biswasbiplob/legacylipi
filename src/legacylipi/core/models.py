@@ -6,7 +6,6 @@ This module defines all the core data structures used throughout the application
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 
 class DetectionMethod(str, Enum):
@@ -66,7 +65,7 @@ class FontInfo:
     """Information about a font used in the PDF."""
 
     name: str
-    encoding: Optional[str] = None
+    encoding: str | None = None
     is_embedded: bool = False
     is_subset: bool = False
 
@@ -88,14 +87,14 @@ class TextBlock:
     """A block of text extracted from a PDF page."""
 
     raw_text: str
-    font_name: Optional[str] = None
+    font_name: str | None = None
     font_size: float = 12.0
-    position: Optional[BoundingBox] = None
-    detected_encoding: Optional[str] = None
-    unicode_text: Optional[str] = None
+    position: BoundingBox | None = None
+    detected_encoding: str | None = None
+    unicode_text: str | None = None
     confidence: float = 0.0
-    translated_text: Optional[str] = None  # Store block-level translation
-    font_category: Optional[str] = None  # heading, body, or caption (set by FontSizeAnalyzer)
+    translated_text: str | None = None  # Store block-level translation
+    font_category: str | None = None  # heading, body, or caption (set by FontSizeAnalyzer)
     is_bold: bool = False
     is_italic: bool = False
 
@@ -151,13 +150,13 @@ class PDFPage:
 class DocumentMetadata:
     """Metadata about the PDF document."""
 
-    title: Optional[str] = None
-    author: Optional[str] = None
-    subject: Optional[str] = None
-    creator: Optional[str] = None
-    producer: Optional[str] = None
-    creation_date: Optional[str] = None
-    modification_date: Optional[str] = None
+    title: str | None = None
+    author: str | None = None
+    subject: str | None = None
+    creator: str | None = None
+    producer: str | None = None
+    creation_date: str | None = None
+    modification_date: str | None = None
     page_count: int = 0
 
 
@@ -201,7 +200,7 @@ class EncodingDetectionResult:
     detected_encoding: str
     confidence: float
     method: DetectionMethod
-    font_name: Optional[str] = None
+    font_name: str | None = None
     fallback_encodings: list[str] = field(default_factory=list)
 
     @property
@@ -249,7 +248,11 @@ class TranslationResult:
         return bool(self.translated_text)
 
     def __repr__(self) -> str:
-        preview = self.translated_text[:50] + "..." if len(self.translated_text) > 50 else self.translated_text
+        preview = (
+            self.translated_text[:50] + "..."
+            if len(self.translated_text) > 50
+            else self.translated_text
+        )
         return (
             f"TranslationResult({self.source_language} -> {self.target_language}, "
             f"backend={self.translation_backend.value}, text={preview!r})"
@@ -262,8 +265,8 @@ class ProcessingResult:
 
     document: PDFDocument
     encoding_results: list[EncodingDetectionResult] = field(default_factory=list)
-    translation_result: Optional[TranslationResult] = None
-    output_path: Optional[Path] = None
+    translation_result: TranslationResult | None = None
+    output_path: Path | None = None
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 

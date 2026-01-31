@@ -5,7 +5,6 @@ and positional metadata from PDF documents.
 """
 
 from pathlib import Path
-from typing import Optional
 
 import fitz  # PyMuPDF
 
@@ -43,7 +42,7 @@ class PDFParser:
         if not self.filepath.suffix.lower() == ".pdf":
             raise PDFParseError(f"Not a PDF file: {self.filepath}")
 
-        self._doc: Optional[fitz.Document] = None
+        self._doc: fitz.Document | None = None
 
     def __enter__(self) -> "PDFParser":
         """Context manager entry."""
@@ -54,7 +53,7 @@ class PDFParser:
         """Context manager exit."""
         self.close()
 
-    def open(self, password: Optional[str] = None) -> None:
+    def open(self, password: str | None = None) -> None:
         """Open the PDF document.
 
         Args:
@@ -205,14 +204,18 @@ class PDFParser:
         """
         blocks = []
 
-        # Use "dict" extraction for detailed information including fonts
+        # Use "rawdict" extraction to get character-level data
+        # This is essential for CID fonts with Identity-H encoding where
+        # characters are stored with null bytes (UTF-16 style)
         try:
-            text_dict = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE)
+            text_dict = page.get_text("rawdict", flags=fitz.TEXT_PRESERVE_WHITESPACE)
         except Exception:
             # Fall back to simple text extraction
             simple_text = page.get_text("text")
             if simple_text.strip():
-                blocks.append(TextBlock(raw_text=simple_text.strip()))
+                simple_text = self._clean_legacy_text(simple_text)
+                if simple_text.strip():
+                    blocks.append(TextBlock(raw_text=simple_text.strip()))
             return blocks
 
         for block in text_dict.get("blocks", []):
@@ -226,7 +229,24 @@ class PDFParser:
                 x0, y0, x1, y1 = float("inf"), float("inf"), 0, 0
 
                 for span in line.get("spans", []):
-                    text = span.get("text", "")
+                    # Try to get text from individual characters (rawdict mode)
+                    chars = span.get("chars", [])
+                    if chars:
+                        # Extract characters, filtering out replacement chars and control chars
+                        span_text = ""
+                        for char_info in chars:
+                            c = char_info.get("c", "")
+                            # Filter: keep printable ASCII and extended ASCII (legacy encoding)
+                            # Skip U+FFFD replacement characters and control chars
+                            if c and ord(c) != 0xFFFD and (c >= " " or c in "\n\r\t"):
+                                span_text += c
+                        text = span_text
+                    else:
+                        # Fallback to span text if no chars available
+                        text = span.get("text", "")
+                        if text:
+                            text = self._clean_legacy_text(text)
+
                     if text:
                         line_text += text
                         # Get font info from first span with text
@@ -257,7 +277,41 @@ class PDFParser:
 
         return blocks
 
-    def parse(self, password: Optional[str] = None) -> PDFDocument:
+    def _clean_legacy_text(self, text: str) -> str:
+        """Clean text extracted from legacy CID fonts.
+
+        Removes null bytes, replacement characters (U+FFFD), and control characters
+        while preserving printable ASCII and extended ASCII used in legacy encodings.
+
+        Args:
+            text: Raw text that may contain artifacts from CID font extraction.
+
+        Returns:
+            Cleaned text with only valid legacy encoding characters.
+        """
+        if not text:
+            return ""
+
+        cleaned = []
+        for c in text:
+            code = ord(c)
+            # Skip null bytes
+            if code == 0:
+                continue
+            # Skip U+FFFD replacement character
+            if code == 0xFFFD:
+                continue
+            # Skip control characters except whitespace
+            if code < 32 and c not in "\n\r\t":
+                continue
+            # Keep printable ASCII (32-126) and extended ASCII (128-255)
+            # Extended ASCII is used by legacy Indian font encodings
+            if 32 <= code <= 126 or 128 <= code <= 255 or c in "\n\r\t":
+                cleaned.append(c)
+
+        return "".join(cleaned)
+
+    def parse(self, password: str | None = None) -> PDFDocument:
         """Parse the entire PDF document.
 
         Args:
@@ -293,7 +347,7 @@ class PDFParser:
                 self.close()
 
 
-def parse_pdf(filepath: Path | str, password: Optional[str] = None) -> PDFDocument:
+def parse_pdf(filepath: Path | str, password: str | None = None) -> PDFDocument:
     """Convenience function to parse a PDF document.
 
     Args:

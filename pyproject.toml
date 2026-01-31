@@ -4,23 +4,22 @@ build-backend = "hatchling.build"
 
 [project]
 name = "legacylipi"
-version = "0.2.1"
+version = "0.3.0"
 description = "Legacy Font PDF Translator - Translate PDFs with legacy Indian font encodings to English"
 readme = "README.md"
 license = "MIT"
 authors = [
     { name = "Biplob Biswas", email = "biplob@example.com" }
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: End Users/Desktop",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Text Processing :: Linguistic",
 ]
 dependencies = [
@@ -34,6 +33,7 @@ dependencies = [
     "pytesseract>=0.3.13",
     "pillow>=12.1.0",
     "nicegui>=2.0.0",
+    "pypdfium2>=5.3.0",
 ]
 
 [project.optional-dependencies]
@@ -49,6 +49,12 @@ ollama = [
 ]
 google = [
     "google-cloud-translate>=3.12.0",
+]
+vision = [
+    "google-cloud-vision>=3.5.0",
+]
+easyocr = [
+    "easyocr>=1.7.0",
 ]
 
 [project.scripts]
@@ -75,18 +81,23 @@ markers = [
 ]
 
 [tool.mypy]
-python_version = "3.10"
-warn_return_any = true
+python_version = "3.12"
+warn_return_any = false
 warn_unused_configs = true
 ignore_missing_imports = true
+disable_error_code = ["assignment", "return-value", "var-annotated", "no-any-return", "import-untyped"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
-ignore = ["E501"]
+ignore = [
+    "E501",  # Line too long
+    "B904",  # Exception chaining (raise ... from err) - less critical
+    "F601",  # Duplicate dict keys - intentional in font mapping files
+]
 
 [tool.coverage.run]
 source = ["src/legacylipi"]

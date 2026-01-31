@@ -69,7 +69,7 @@ class RateLimiter:
         # Apply exponential backoff based on request count
         if request_count > self._scale_after:
             backoff_level = (request_count - self._scale_after) // self._scale_after + 1
-            delay *= factor ** backoff_level
+            delay *= factor**backoff_level
 
         if elapsed < delay:
             await asyncio.sleep(delay - elapsed)

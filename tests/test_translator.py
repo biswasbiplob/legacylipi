@@ -1,10 +1,14 @@
 """Tests for Translation Engine module."""
 
 import asyncio
+import shutil
 
 import pytest
 
 from legacylipi.core.models import TranslationBackend
+
+# Check if translate-shell is available
+TRANS_AVAILABLE = shutil.which("trans") is not None
 from legacylipi.core.translator import (
     GoogleTranslateBackend,
     MockTranslationBackend,
@@ -148,6 +152,7 @@ class TestMyMemoryTranslationBackend:
     def test_backend_type(self):
         """Test that backend type is correct."""
         from legacylipi.core.translator import MyMemoryTranslationBackend
+
         backend = MyMemoryTranslationBackend()
         assert backend.backend_type == TranslationBackend.MYMEMORY
 
@@ -163,6 +168,7 @@ class TestMyMemoryTranslationBackend:
     async def test_translate_empty_text(self):
         """Test translation of empty text."""
         from legacylipi.core.translator import MyMemoryTranslationBackend
+
         backend = MyMemoryTranslationBackend()
         result = await backend.translate("", "mr", "en")
         assert result == ""
@@ -177,24 +183,28 @@ class TestCreateTranslatorMyMemory:
         assert engine.backend_type == TranslationBackend.MYMEMORY
 
 
+@pytest.mark.skipif(not TRANS_AVAILABLE, reason="translate-shell not installed")
 class TestTranslateShellBackend:
     """Tests for TranslateShellBackend."""
 
     def test_backend_type(self):
         """Test that backend type is correct."""
         from legacylipi.core.translator import TranslateShellBackend
+
         backend = TranslateShellBackend()
         assert backend.backend_type == TranslationBackend.TRANS
 
     def test_default_engine(self):
         """Test default engine is google."""
         from legacylipi.core.translator import TranslateShellBackend
+
         backend = TranslateShellBackend()
         assert backend._engine == "google"
 
     def test_custom_engine(self):
         """Test custom engine configuration."""
         from legacylipi.core.translator import TranslateShellBackend
+
         backend = TranslateShellBackend(engine="bing")
         assert backend._engine == "bing"
 
@@ -202,11 +212,13 @@ class TestTranslateShellBackend:
     async def test_translate_empty_text(self):
         """Test translation of empty text."""
         from legacylipi.core.translator import TranslateShellBackend
+
         backend = TranslateShellBackend()
         result = await backend.translate("", "mr", "en")
         assert result == ""
 
 
+@pytest.mark.skipif(not TRANS_AVAILABLE, reason="translate-shell not installed")
 class TestCreateTranslatorTrans:
     """Tests for create_translator with translate-shell."""
 
@@ -443,18 +455,21 @@ class TestOpenAITranslationBackend:
     def test_backend_type(self):
         """Test that backend type is correct."""
         from legacylipi.core.translator import OpenAITranslationBackend
+
         backend = OpenAITranslationBackend(api_key="test-key")
         assert backend.backend_type == TranslationBackend.OPENAI
 
     def test_default_model(self):
         """Test default model configuration."""
         from legacylipi.core.translator import OpenAITranslationBackend
+
         backend = OpenAITranslationBackend(api_key="test-key")
         assert backend._model == "gpt-4o-mini"
 
     def test_custom_model(self):
         """Test custom model configuration."""
         from legacylipi.core.translator import OpenAITranslationBackend
+
         backend = OpenAITranslationBackend(api_key="test-key", model="gpt-4o")
         assert backend._model == "gpt-4o"
 
@@ -500,6 +515,7 @@ class TestOpenAITranslationBackend:
     async def test_translate_empty_text(self):
         """Test translation of empty text."""
         from legacylipi.core.translator import OpenAITranslationBackend
+
         backend = OpenAITranslationBackend(api_key="test-key")
         result = await backend.translate("", "mr", "en")
         assert result == ""

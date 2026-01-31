@@ -1,7 +1,6 @@
 """Text wrapping utilities for PDF generation."""
 
 from pathlib import Path
-from typing import Optional
 
 try:
     import fitz
@@ -12,13 +11,13 @@ except ImportError:
 class TextWrapper:
     """Text wrapping and font sizing utilities for PDF generation."""
 
-    def __init__(self, font_path: Optional[str] = None):
+    def __init__(self, font_path: str | None = None):
         """Initialize text wrapper.
 
         Args:
             font_path: Optional path to font file for precise measurements.
         """
-        self._font: Optional["fitz.Font"] = None
+        self._font: fitz.Font | None = None
         if font_path and fitz and Path(font_path).exists():
             try:
                 self._font = fitz.Font(fontfile=font_path)
@@ -84,9 +83,9 @@ class TextWrapper:
         """
         lines = []
 
-        for paragraph in text.split('\n'):
+        for paragraph in text.split("\n"):
             if not paragraph.strip():
-                lines.append('')
+                lines.append("")
                 continue
 
             words = paragraph.split()
@@ -96,7 +95,7 @@ class TextWrapper:
             for word in words:
                 if self._font:
                     word_width = self._font.text_length(word, fontsize=font_size)
-                    space_width = self._font.text_length(' ', fontsize=font_size)
+                    space_width = self._font.text_length(" ", fontsize=font_size)
                 else:
                     # Fallback estimation (average char width ~0.5 * font_size)
                     word_width = len(word) * font_size * 0.5
@@ -109,14 +108,14 @@ class TextWrapper:
                     current_width = test_width
                 else:
                     if current_line:
-                        lines.append(' '.join(current_line))
+                        lines.append(" ".join(current_line))
                     current_line = [word]
                     current_width = word_width
 
             if current_line:
-                lines.append(' '.join(current_line))
+                lines.append(" ".join(current_line))
 
-        return lines if lines else ['']
+        return lines if lines else [""]
 
     def calculate_fit_font_size(
         self,

@@ -61,16 +61,29 @@ legacylipi/
 - Scales font down to fit translated text in original bounds
 - Use when: PDF output with OCR (has position data)
 
+## Supported Legacy Font Encodings
+
+| Encoding | Font Families | Language | Notes |
+|----------|---------------|----------|-------|
+| `shree-dev` | SHREE-DEV-0708, 0714, 0715, 0721 | Marathi | Primary encoding, comprehensive mapping |
+| `shree-lipi` | Shree-Lipi, SDL-DEV | Marathi | Legacy Shree fonts |
+| `dvb-tt` | DVBWTTSurekh, DVBTTSurekh | Marathi | Government documents |
+| `kruti-dev` | KrutiDev010, KrutiDev040 | Hindi | Common Hindi encoding |
+
+Mapping files: `src/legacylipi/mappings/shree_dev.py`, `dvb_tt.py`, `loader.py`
+
 ## Translation Backends (translator.py)
 
 | Backend | Class | Notes |
 |---------|-------|-------|
-| `google` | `GoogleTranslateBackend` | Free web API, rate limited |
+| `trans` | `TranslateShellBackend` | **Recommended** - CLI tool, fast, requires `translate-shell` |
+| `google` | `GoogleTranslateBackend` | Free web API, heavily rate limited |
 | `mymemory` | `MyMemoryTranslationBackend` | Free, 500 char limit per request |
-| `trans` | `TranslateShellBackend` | CLI tool, requires `translate-shell` |
 | `ollama` | `OllamaTranslationBackend` | Local LLM, requires Ollama server |
 | `openai` | `OpenAITranslationBackend` | Requires API key |
 | `mock` | `MockTranslationBackend` | For testing |
+
+**Note:** Use `trans` (Translate-Shell) for best performance. Install with: `brew install translate-shell`
 
 ## Key Methods
 
@@ -102,6 +115,21 @@ cd legacylipi
 uv run python -m legacylipi.ui.app    # Web UI
 uv run python -m legacylipi.cli       # CLI
 ```
+
+## Pre-Commit Checks
+
+**IMPORTANT:** Always run the pre-commit checks before committing changes:
+
+```bash
+./scripts/check.sh
+```
+
+This runs:
+1. **Linting** - `ruff check src/`
+2. **Type checking** - `mypy src/legacylipi`
+3. **Tests** - `pytest tests/ -v`
+
+Only commit if all checks pass. CI will run the same checks on PRs.
 
 ## Dependencies
 
@@ -135,65 +163,63 @@ Unicode fonts searched in order:
 
 ## Automated Testing with Playwright MCP
 
-Use Playwright MCP tools to automate UI testing after code changes.
+**IMPORTANT:** Prefer CLI testing over Playwright for faster iteration. Use Playwright only for end-to-end UI verification.
 
-### Test Workflow
+### Quick CLI Testing (Preferred)
 
-1. **Start the server** (if not running):
+```bash
+# Test full pipeline without UI
+uv run python -c "
+from legacylipi.core.pdf_parser import PDFParser
+from legacylipi.core.encoding_detector import EncodingDetector
+from legacylipi.core.unicode_converter import UnicodeConverter
+
+parser = PDFParser('Javadekar.pdf')
+doc = parser.parse()
+detector = EncodingDetector()
+result, _ = detector.detect_from_document(doc)
+print(f'Encoding: {result.detected_encoding}, Confidence: {result.confidence}')
+
+converter = UnicodeConverter()
+for block in doc.pages[0].text_blocks[:3]:
+    conv = converter.convert_text(block.raw_text, result.detected_encoding)
+    print(f'Raw: {block.raw_text[:30]} -> Unicode: {conv.converted_text[:30]}')
+"
+```
+
+### Playwright UI Testing (When Needed)
+
+1. **Start the server**:
    ```bash
-   uv run python -m legacylipi.ui.app &
+   uv run python -m legacylipi.ui.app > /tmp/legacylipi.log 2>&1 &
+   sleep 5
    ```
 
-2. **Navigate to UI**:
-   ```
-   mcp__playwright__browser_navigate: http://localhost:8080
-   ```
+2. **Test workflow**:
+   - Navigate: `mcp__playwright__browser_navigate: http://localhost:8080`
+   - Upload: Click "Choose File" → `mcp__playwright__browser_file_upload: ["/path/to/test.pdf"]`
+   - Select backend: **Use "Translate-Shell (CLI)"** - it's fastest
+   - Translate: Click "Translate" button
+   - Wait: `mcp__playwright__browser_wait_for: Download` (may take 2-5 mins for large PDFs)
 
-3. **Upload test PDF**:
-   ```
-   mcp__playwright__browser_click: "Choose File" button
-   mcp__playwright__browser_file_upload: ["/path/to/test.pdf"]
-   ```
+### Backend Selection for Testing
 
-4. **Configure settings**:
-   ```
-   mcp__playwright__browser_click: "Use OCR" checkbox
-   # Verify Structure Preserving mode is selected
-   # Verify PDF output format
-   ```
+| Backend | Speed | Best For |
+|---------|-------|----------|
+| Translate-Shell | Fast | Production testing, recommended |
+| Google Translate | Slow (rate limited) | Avoid for testing |
+| MyMemory | Medium | Small files only (500 char limit) |
+| Mock | Instant | Unit tests, pipeline verification |
 
-5. **Run translation**:
-   ```
-   mcp__playwright__browser_click: "Translate" button
-   mcp__playwright__browser_wait_for: Wait for completion (check for "Download" button)
-   ```
+### Test PDFs
 
-6. **Download and verify output**:
-   ```
-   mcp__playwright__browser_click: "Download" button
-   # Read the generated PDF to verify output
-   ```
+| File | Size | Pages | Encoding | Notes |
+|------|------|-------|----------|-------|
+| `Javadekar.pdf` | 310KB | 6 | SHREE-DEV | Primary test file |
+| `Marathi-Bhascyacha-vaapar.pdf` | 135KB | 11 | SHREE-DEV | Alternative test |
 
-7. **Evaluate output quality** (Critical step):
-   - Open translated PDF and source PDF side-by-side
-   - Check font consistency: All body text should be uniform 11pt
-   - Verify no wildly varying font sizes across pages
-   - Check text positioning: Translated text should be at similar positions to source
-   - If fonts are inconsistent, check `_place_translated_blocks_with_positions()` in output_generator.py
-   - Common issue: Font scaling to fit bounding boxes causes inconsistent sizes
+### Known Issues
 
-### Key UI Elements (refs may change)
-
-| Element | Description |
-|---------|-------------|
-| Upload area | Drop zone or "Choose File" button |
-| OCR checkbox | "Use OCR (for scanned/image PDFs)" |
-| Translation Mode | Combobox: "Structure Preserving" or "Flowing Text" |
-| Output Format | Combobox: PDF, Text, Markdown |
-| Translate button | Main action button |
-| Status area | Shows progress and completion |
-| Download button | Appears after successful translation |
-
-### Test PDF Location
-
-Test file: `Marathi-Bhascyacha-vaapar.pdf` (135KB, 11 pages)
+- **MuPDF CID errors**: "unknown cid font type" warnings are normal for SHREE-DEV fonts - extraction still works
+- **Google Translate rate limiting**: Use Translate-Shell instead
+- **WebSocket timeout**: Fixed by batched UI updates (every 10 blocks)

@@ -6,7 +6,6 @@ uses a legacy Indian font encoding (Shree-Lipi, Kruti Dev, etc.).
 
 import re
 from dataclasses import dataclass
-from typing import Optional
 
 from legacylipi.core.models import (
     DetectionMethod,
@@ -15,7 +14,6 @@ from legacylipi.core.models import (
     PDFDocument,
     TextBlock,
 )
-
 
 # Unicode ranges for Indian scripts
 DEVANAGARI_RANGE = (0x0900, 0x097F)
@@ -52,11 +50,20 @@ UNICODE_FONT_PATTERNS = [
 # Database of known legacy font patterns
 LEGACY_FONT_PATTERNS: list[LegacyFontPattern] = [
     LegacyFontPattern(
-        encoding_name="shree-lipi",
+        encoding_name="shree-dev",
         patterns=[
             r"shree[-_\s]*dev[-_\s]*07\d{2}",
-            r"shree[-_\s]*lipi",
+            r"shree[-_\s]*dev[-_\s]*\d+",
             r"shree[-_\s]*dev",
+        ],
+        # Signatures based on common SHREE-DEV character sequences
+        signatures=["CP", "BP", "KP", "PR", "ÀP", "ÁP", "ÌP", "mP", "rP", "Am"],
+        priority=10,  # Higher priority for specific SHREE-DEV fonts
+    ),
+    LegacyFontPattern(
+        encoding_name="shree-lipi",
+        patterns=[
+            r"shree[-_\s]*lipi",
             r"sdl[-_\s]*dev",
         ],
         signatures=["´Ö", "Æü", "Ö¸ü", "®Ö", "ÖμÖ", "ÖÂ", "™Òü", "×", "†"],
@@ -145,7 +152,7 @@ LEGACY_FONT_PATTERNS: list[LegacyFontPattern] = [
 class EncodingDetector:
     """Detector for identifying font encodings in PDF documents."""
 
-    def __init__(self, custom_patterns: Optional[list[LegacyFontPattern]] = None):
+    def __init__(self, custom_patterns: list[LegacyFontPattern] | None = None):
         """Initialize the encoding detector.
 
         Args:
@@ -165,11 +172,9 @@ class EncodingDetector:
             ]
 
         # Compile Unicode font patterns
-        self._unicode_patterns = [
-            re.compile(p, re.IGNORECASE) for p in UNICODE_FONT_PATTERNS
-        ]
+        self._unicode_patterns = [re.compile(p, re.IGNORECASE) for p in UNICODE_FONT_PATTERNS]
 
-    def detect_from_font_name(self, font_name: str) -> Optional[EncodingDetectionResult]:
+    def detect_from_font_name(self, font_name: str) -> EncodingDetectionResult | None:
         """Detect encoding from a font name.
 
         Args:
@@ -262,7 +267,7 @@ class EncodingDetector:
             )
 
         # Check for legacy font signatures
-        best_match: Optional[str] = None
+        best_match: str | None = None
         best_score = 0
         fallbacks: list[str] = []
 
@@ -302,7 +307,7 @@ class EncodingDetector:
                 detected_encoding="unknown-legacy",
                 confidence=0.50,
                 method=DetectionMethod.HEURISTIC,
-                fallback_encodings=["shree-lipi", "kruti-dev"],
+                fallback_encodings=["shree-dev", "shree-lipi", "kruti-dev"],
             )
 
         return EncodingDetectionResult(
@@ -311,7 +316,7 @@ class EncodingDetector:
             method=DetectionMethod.HEURISTIC,
         )
 
-    def detect_from_fonts(self, fonts: list[FontInfo]) -> Optional[EncodingDetectionResult]:
+    def detect_from_fonts(self, fonts: list[FontInfo]) -> EncodingDetectionResult | None:
         """Detect encoding from a list of fonts.
 
         Args:
@@ -375,7 +380,7 @@ class EncodingDetector:
 
         # Analyze each page
         for page in document.pages:
-            page_encoding: Optional[str] = None
+            page_encoding: str | None = None
             page_confidence = 0.0
             page_method = DetectionMethod.HEURISTIC
 
@@ -437,9 +442,9 @@ class EncodingDetector:
 
 
 def detect_encoding(
-    text: Optional[str] = None,
-    font_name: Optional[str] = None,
-    document: Optional[PDFDocument] = None,
+    text: str | None = None,
+    font_name: str | None = None,
+    document: PDFDocument | None = None,
 ) -> EncodingDetectionResult:
     """Convenience function for encoding detection.
 

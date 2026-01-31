@@ -7,21 +7,20 @@ including Google Translate, Ollama (local LLM), and mock for testing.
 import asyncio
 import re
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import httpx
 
-from typing import Callable
-
 from legacylipi.core.models import TextBlock, TranslationBackend, TranslationResult
+from legacylipi.core.utils.language_codes import (
+    LANGUAGE_NAMES,
+    get_google_code,
+    get_language_name,
+    get_mymemory_code,
+)
 from legacylipi.core.utils.rate_limiter import RateLimiter
 from legacylipi.core.utils.usage_tracker import UsageTracker
-from legacylipi.core.utils.language_codes import (
-    get_language_name,
-    get_google_code,
-    get_mymemory_code,
-    LANGUAGE_NAMES,
-)
 
 
 class TranslationError(Exception):
@@ -860,7 +859,6 @@ class GCPCloudTranslateBackend(TranslationBackendBase):
 
         try:
             import asyncio
-            from google.cloud import translate_v3 as translate
 
             client = self._get_client()
             parent = f"projects/{self._project_id}/locations/{self._location}"
@@ -901,16 +899,31 @@ class GCPCloudTranslateBackend(TranslationBackendBase):
                 "google-cloud-translate not installed. Install with: "
                 "pip install google-cloud-translate"
             )
+        except UsageLimitExceededError:
+            raise
+        except TranslationError:
+            raise
         except Exception as e:
-            if "UsageLimitExceededError" in str(type(e).__name__):
-                raise
+            # Import GCP exceptions for more specific error handling
+            try:
+                from google.api_core.exceptions import Forbidden, PermissionDenied
+
+                if isinstance(e, (Forbidden, PermissionDenied)):
+                    raise TranslationError(
+                        f"GCP permission denied. Ensure Cloud Translation API is enabled "
+                        f"and credentials are configured: {e}"
+                    ) from e
+            except ImportError:
+                pass
+
+            # Fallback to string matching for cases where google-api-core isn't available
             error_msg = str(e)
             if "403" in error_msg or "permission" in error_msg.lower():
                 raise TranslationError(
                     f"GCP permission denied. Ensure Cloud Translation API is enabled "
                     f"and credentials are configured: {e}"
-                )
-            raise TranslationError(f"GCP translation error: {e}")
+                ) from e
+            raise TranslationError(f"GCP translation error: {e}") from e
 
     async def close(self) -> None:
         """Close the client."""
@@ -919,6 +932,191 @@ class GCPCloudTranslateBackend(TranslationBackendBase):
     def get_usage_summary(self) -> dict:
         """Get current usage summary for display."""
         return self._usage_tracker.get_usage_summary("gcp_translate")
+
+
+class GCPDocumentTranslationBackend(TranslationBackendBase):
+    """Google Cloud Document Translation API backend.
+
+    This backend can translate entire PDF documents directly, including scanned
+    PDFs with legacy fonts. It uses Google's built-in OCR internally and preserves
+    document layout - similar to Google Translate's camera feature.
+
+    This is the recommended approach for PDFs with legacy Indian fonts that
+    render incorrectly with standard text extraction.
+
+    Requires:
+        - google-cloud-translate package (v3+)
+        - GOOGLE_APPLICATION_CREDENTIALS environment variable
+        - Cloud Translation API enabled in GCP project
+
+    Cost: ~$0.08 per page for document translation
+    """
+
+    def __init__(
+        self,
+        project_id: str,
+        location: str = "us-central1",  # Document translation requires specific location
+        timeout: float = 300.0,  # Longer timeout for document processing
+    ):
+        """Initialize GCP Document Translation backend.
+
+        Args:
+            project_id: GCP project ID.
+            location: API location (must be 'us-central1' for document translation).
+            timeout: Request timeout in seconds.
+        """
+        self._project_id = project_id
+        self._location = location
+        self._timeout = timeout
+        self._client = None
+
+    @property
+    def backend_type(self) -> TranslationBackend:
+        return TranslationBackend.GCP_CLOUD
+
+    def _get_client(self):
+        """Get or create Translation client."""
+        if self._client is None:
+            try:
+                from google.cloud import translate_v3beta1 as translate
+
+                self._client = translate.TranslationServiceClient()
+            except ImportError:
+                raise TranslationError(
+                    "google-cloud-translate not installed. Install with: "
+                    "pip install google-cloud-translate"
+                )
+        return self._client
+
+    async def translate(
+        self,
+        text: str,
+        source_lang: str,
+        target_lang: str,
+    ) -> str:
+        """Translate text (falls back to regular text translation).
+
+        For document translation, use translate_document() instead.
+        """
+        # Fall back to regular text translation for plain text
+        try:
+            client = self._get_client()
+            parent = f"projects/{self._project_id}/locations/{self._location}"
+
+            from legacylipi.core.utils.language_codes import get_google_code
+
+            source = get_google_code(source_lang)
+            target = get_google_code(target_lang)
+
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: client.translate_text(
+                    request={
+                        "parent": parent,
+                        "contents": [text],
+                        "source_language_code": source,
+                        "target_language_code": target,
+                        "mime_type": "text/plain",
+                    }
+                ),
+            )
+
+            if not response.translations:
+                raise TranslationError("Empty response from GCP Translation API")
+
+            return response.translations[0].translated_text
+
+        except Exception as e:
+            raise TranslationError(f"GCP translation error: {e}")
+
+    async def translate_document(
+        self,
+        pdf_content: bytes,
+        source_lang: str,
+        target_lang: str,
+    ) -> bytes:
+        """Translate a PDF document directly using Document Translation API.
+
+        This method translates the entire PDF, including scanned pages with
+        legacy fonts. Google's built-in OCR extracts text from the rendered
+        images, translates it, and preserves the document layout.
+
+        Args:
+            pdf_content: PDF file content as bytes.
+            source_lang: Source language code (e.g., 'mr' for Marathi).
+            target_lang: Target language code (e.g., 'en' for English).
+
+        Returns:
+            Translated PDF content as bytes.
+
+        Raises:
+            TranslationError: If translation fails.
+        """
+        try:
+            from google.cloud import translate_v3beta1 as translate
+
+            client = self._get_client()
+            parent = f"projects/{self._project_id}/locations/{self._location}"
+
+            from legacylipi.core.utils.language_codes import get_google_code
+
+            source = get_google_code(source_lang)
+            target = get_google_code(target_lang)
+
+            # Create document input config
+            document_input_config = translate.DocumentInputConfig(
+                content=pdf_content,
+                mime_type="application/pdf",
+            )
+
+            # Create document output config (return as bytes)
+            document_output_config = translate.DocumentOutputConfig(
+                mime_type="application/pdf",
+            )
+
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: client.translate_document(
+                    request={
+                        "parent": parent,
+                        "source_language_code": source,
+                        "target_language_code": target,
+                        "document_input_config": document_input_config,
+                        "document_output_config": document_output_config,
+                    }
+                ),
+            )
+
+            # Get translated document bytes
+            if response.document_translation.byte_stream_outputs:
+                return response.document_translation.byte_stream_outputs[0]
+            else:
+                raise TranslationError("No output from Document Translation API")
+
+        except ImportError:
+            raise TranslationError(
+                "google-cloud-translate not installed. Install with: "
+                "pip install google-cloud-translate"
+            )
+        except Exception as e:
+            error_msg = str(e)
+            if "403" in error_msg or "permission" in error_msg.lower():
+                raise TranslationError(
+                    f"GCP permission denied. Ensure Cloud Translation API is enabled "
+                    f"and credentials are configured: {e}"
+                )
+            elif "400" in error_msg:
+                raise TranslationError(
+                    f"Invalid request to Document Translation API. "
+                    f"Ensure the PDF is valid and under 20MB: {e}"
+                )
+            raise TranslationError(f"GCP document translation error: {e}")
+
+    async def close(self) -> None:
+        """Close the client."""
+        self._client = None
 
 
 class TranslationEngine:
@@ -1081,10 +1279,7 @@ class TranslationEngine:
         target = target_lang or self._config.target_language
 
         # Filter to blocks that have text to translate
-        translatable_blocks = [
-            b for b in blocks
-            if (b.unicode_text or b.raw_text or "").strip()
-        ]
+        translatable_blocks = [b for b in blocks if (b.unicode_text or b.raw_text or "").strip()]
 
         if not translatable_blocks:
             return blocks
@@ -1093,7 +1288,9 @@ class TranslationEngine:
         completed = 0
         total = len(translatable_blocks)
 
-        async def translate_single(block: TextBlock) -> None:
+        failed_blocks: list[tuple[int, str]] = []  # Track (index, error_message) for failed blocks
+
+        async def translate_single(block: TextBlock, index: int) -> None:
             nonlocal completed
             async with semaphore:
                 text = block.unicode_text or block.raw_text
@@ -1105,17 +1302,32 @@ class TranslationEngine:
                     except TranslationError as e:
                         # Log the error and keep original text on failure
                         import logging
-                        logging.warning(f"Translation failed for block: {e}")
+
+                        logging.warning(f"Translation failed for block {index + 1}: {e}")
                         block.translated_text = text
+                        failed_blocks.append((index + 1, str(e)))
                 else:
                     block.translated_text = text or ""
 
                 completed += 1
                 if progress_callback:
                     progress_callback(completed, total)
+                # Yield to event loop to allow WebSocket keepalive messages to process
+                # This prevents NiceGUI client disconnection during long translation operations
+                # 20ms yield gives adequate time for WebSocket heartbeat processing
+                await asyncio.sleep(0.02)
 
         # Translate all blocks concurrently (with semaphore limiting)
-        await asyncio.gather(*[translate_single(b) for b in translatable_blocks])
+        await asyncio.gather(*[translate_single(b, i) for i, b in enumerate(translatable_blocks)])
+
+        # Report failed blocks to user via logging
+        if failed_blocks:
+            import logging
+
+            logging.warning(
+                f"Translation completed with {len(failed_blocks)} failed block(s) out of {total}. "
+                f"Failed blocks contain original (untranslated) text."
+            )
 
         return blocks
 

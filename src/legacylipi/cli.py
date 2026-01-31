@@ -5,7 +5,6 @@ This module provides the CLI commands for the LegacyLipi tool.
 
 import sys
 from pathlib import Path
-from typing import Optional
 
 import click
 from rich.console import Console
@@ -13,12 +12,10 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
 from legacylipi import __version__
-from legacylipi.core.encoding_detector import EncodingDetector, detect_encoding
+from legacylipi.core.encoding_detector import EncodingDetector
 from legacylipi.core.models import OutputFormat
 from legacylipi.core.ocr_parser import (
     OCRError,
-    OCRParser,
-    TesseractNotFoundError,
     check_language_available,
     check_tesseract_available,
     get_available_languages,
@@ -26,7 +23,11 @@ from legacylipi.core.ocr_parser import (
 )
 from legacylipi.core.output_generator import OutputGenerator
 from legacylipi.core.pdf_parser import PDFParseError, parse_pdf
-from legacylipi.core.translator import TranslationEngine, TranslationError, UsageLimitExceededError, create_translator
+from legacylipi.core.translator import (
+    TranslationError,
+    UsageLimitExceededError,
+    create_translator,
+)
 from legacylipi.core.unicode_converter import UnicodeConverter
 from legacylipi.mappings.loader import MappingLoader
 
@@ -69,12 +70,14 @@ def main():
 @main.command()
 @click.argument("input_file", type=click.Path(exists=True, path_type=Path))
 @click.option(
-    "-o", "--output",
+    "-o",
+    "--output",
     type=click.Path(path_type=Path),
     help="Output file path. Defaults to input file with new extension.",
 )
 @click.option(
-    "--format", "output_format",
+    "--format",
+    "output_format",
     type=click.Choice(["text", "markdown", "md", "pdf"]),
     default="text",
     help="Output format (text, markdown, or pdf).",
@@ -144,7 +147,8 @@ def main():
     help="DPI for OCR rendering (higher = better quality but slower). Default: 300",
 )
 @click.option(
-    "--quiet", "-q",
+    "--quiet",
+    "-q",
     is_flag=True,
     help="Suppress progress output.",
 )
@@ -155,14 +159,14 @@ def main():
 )
 def translate(
     input_file: Path,
-    output: Optional[Path],
+    output: Path | None,
     output_format: str,
-    encoding: Optional[str],
+    encoding: str | None,
     target_lang: str,
     translator: str,
-    model: Optional[str],
-    trans_path: Optional[str],
-    gcp_project: Optional[str],
+    model: str | None,
+    trans_path: str | None,
+    gcp_project: str | None,
     force_translate: bool,
     no_translate: bool,
     use_ocr: bool,
@@ -198,8 +202,10 @@ def translate(
             print_error(f"OCR language '{ocr_lang}' is not available.")
             available_langs = get_available_languages()
             if available_langs:
-                console.print(f"\n[dim]Available languages:[/dim] {', '.join(available_langs[:10])}")
-            console.print(f"\n[dim]To install Marathi language pack:[/dim]")
+                console.print(
+                    f"\n[dim]Available languages:[/dim] {', '.join(available_langs[:10])}"
+                )
+            console.print("\n[dim]To install Marathi language pack:[/dim]")
             console.print("  sudo apt-get install tesseract-ocr-mar")
             sys.exit(1)
 
@@ -229,14 +235,19 @@ def translate(
             if use_ocr:
                 task = progress.add_task(f"Running OCR ({ocr_lang})...", total=None)
                 document = parse_pdf_with_ocr(input_file, lang=ocr_lang, dpi=ocr_dpi)
-                progress.update(task, description=f"[green]✓[/green] OCR extracted {document.page_count} pages")
+                progress.update(
+                    task, description=f"[green]✓[/green] OCR extracted {document.page_count} pages"
+                )
 
                 if not quiet:
-                    console.print(f"\n[dim]📄 Input:[/dim] {input_file.name} ({document.page_count} pages)")
+                    console.print(
+                        f"\n[dim]📄 Input:[/dim] {input_file.name} ({document.page_count} pages)"
+                    )
                     console.print(f"[dim]👁 OCR:[/dim] {ocr_lang} @ {ocr_dpi} DPI")
 
                 # In OCR mode, text is already Unicode - create dummy encoding result
                 from legacylipi.core.models import DetectionMethod, EncodingDetectionResult
+
                 encoding_result = EncodingDetectionResult(
                     detected_encoding="unicode-ocr",
                     confidence=1.0,
@@ -247,10 +258,14 @@ def translate(
             else:
                 task = progress.add_task("Parsing PDF...", total=None)
                 document = parse_pdf(input_file)
-                progress.update(task, description=f"[green]✓[/green] Parsed {document.page_count} pages")
+                progress.update(
+                    task, description=f"[green]✓[/green] Parsed {document.page_count} pages"
+                )
 
                 if not quiet:
-                    console.print(f"\n[dim]📄 Input:[/dim] {input_file.name} ({document.page_count} pages)")
+                    console.print(
+                        f"\n[dim]📄 Input:[/dim] {input_file.name} ({document.page_count} pages)"
+                    )
 
                 # Step 2: Detect encoding
                 progress.update(task, description="Detecting encoding...")
@@ -259,6 +274,7 @@ def translate(
                 if encoding:
                     # User specified encoding
                     from legacylipi.core.models import DetectionMethod, EncodingDetectionResult
+
                     encoding_result = EncodingDetectionResult(
                         detected_encoding=encoding,
                         confidence=1.0,
@@ -270,11 +286,13 @@ def translate(
 
                 progress.update(
                     task,
-                    description=f"[green]✓[/green] Encoding: {encoding_result.detected_encoding} ({encoding_result.confidence:.0%})"
+                    description=f"[green]✓[/green] Encoding: {encoding_result.detected_encoding} ({encoding_result.confidence:.0%})",
                 )
 
                 if not quiet:
-                    console.print(f"[dim]🎯 Encoding:[/dim] {encoding_result.detected_encoding} (confidence: {encoding_result.confidence:.0%})")
+                    console.print(
+                        f"[dim]🎯 Encoding:[/dim] {encoding_result.detected_encoding} (confidence: {encoding_result.confidence:.0%})"
+                    )
 
                 # Step 3: Convert to Unicode
                 progress.update(task, description="Converting to Unicode...")
@@ -297,7 +315,9 @@ def translate(
                     translator_kwargs["trans_path"] = trans_path
                 if translator == "gcp_cloud":
                     if not gcp_project:
-                        print_error("GCP project ID required for gcp_cloud translator. Use --gcp-project or set GCP_PROJECT_ID.")
+                        print_error(
+                            "GCP project ID required for gcp_cloud translator. Use --gcp-project or set GCP_PROJECT_ID."
+                        )
                         sys.exit(1)
                     translator_kwargs["project_id"] = gcp_project
                     translator_kwargs["enforce_free_tier"] = not force_translate
@@ -322,10 +342,7 @@ def translate(
                 if translation_result.warnings:
                     # Check if ALL chunks failed (no translation happened)
                     if len(translation_result.warnings) >= translation_result.chunk_count:
-                        progress.update(
-                            task,
-                            description=f"[red]✗[/red] Translation failed"
-                        )
+                        progress.update(task, description="[red]✗[/red] Translation failed")
                         raise TranslationError(
                             f"All translation chunks failed. First error: {translation_result.warnings[0]}"
                         )
@@ -333,21 +350,25 @@ def translate(
                         # Partial failure - show warnings
                         progress.update(
                             task,
-                            description=f"[yellow]⚠[/yellow] Translated with {len(translation_result.warnings)} warnings"
+                            description=f"[yellow]⚠[/yellow] Translated with {len(translation_result.warnings)} warnings",
                         )
                         if not quiet:
                             for warning in translation_result.warnings[:3]:  # Show first 3 warnings
                                 console.print(f"[yellow]   ⚠ {warning}[/yellow]")
                             if len(translation_result.warnings) > 3:
-                                console.print(f"[yellow]   ... and {len(translation_result.warnings) - 3} more warnings[/yellow]")
+                                console.print(
+                                    f"[yellow]   ... and {len(translation_result.warnings) - 3} more warnings[/yellow]"
+                                )
                 else:
                     progress.update(
                         task,
-                        description=f"[green]✓[/green] Translated ({translation_result.chunk_count} chunks)"
+                        description=f"[green]✓[/green] Translated ({translation_result.chunk_count} chunks)",
                     )
 
                 if not quiet:
-                    console.print(f"[dim]🌐 Translated:[/dim] {len(unicode_text)} chars → {target_lang}")
+                    console.print(
+                        f"[dim]🌐 Translated:[/dim] {len(unicode_text)} chars → {target_lang}"
+                    )
 
             # Step 5: Generate output
             progress.update(task, description="Generating output...")
@@ -371,7 +392,9 @@ def translate(
             console.print(f"   • Pages processed: {document.page_count}")
             console.print(f"   • Encoding: {encoding_result.detected_encoding}")
             if translation_result:
-                console.print(f"   • Translation: {translation_result.source_language} → {translation_result.target_language}")
+                console.print(
+                    f"   • Translation: {translation_result.source_language} → {translation_result.target_language}"
+                )
                 console.print(f"   • Backend: {translation_result.translation_backend.value}")
 
     except PDFParseError as e:
@@ -387,13 +410,19 @@ def translate(
     except TranslationError as e:
         print_error(f"Translation failed: {e}")
         console.print("\n[dim]Suggestions:[/dim]")
-        console.print("  • Try [cyan]--translator trans[/cyan] for translate-shell CLI (apt install translate-shell)")
+        console.print(
+            "  • Try [cyan]--translator trans[/cyan] for translate-shell CLI (apt install translate-shell)"
+        )
         console.print("  • Try [cyan]--translator ollama[/cyan] for local LLM translation")
         console.print("  • Try [cyan]--translator mymemory[/cyan] for free MyMemory API")
-        console.print("  • Try [cyan]--no-translate[/cyan] to skip translation and output Unicode only")
+        console.print(
+            "  • Try [cyan]--no-translate[/cyan] to skip translation and output Unicode only"
+        )
         sys.exit(1)
     except UsageLimitExceededError as e:
-        print_warning(f"GCP free tier limit: {e.current_usage:,}/{e.limit:,} characters used this month.")
+        print_warning(
+            f"GCP free tier limit: {e.current_usage:,}/{e.limit:,} characters used this month."
+        )
         print_warning(f"This translation requires {e.requested:,} more characters.")
         console.print("\n[dim]Options:[/dim]")
         console.print("  • Use [cyan]--force-translate[/cyan] to proceed (charges may apply)")
@@ -403,13 +432,22 @@ def translate(
     except Exception as e:
         # Handle tenacity retry errors that wrap TranslationError
         error_msg = str(e)
-        if "TranslationError" in error_msg or "403" in error_msg or "429" in error_msg or "proxy" in error_msg.lower():
+        if (
+            "TranslationError" in error_msg
+            or "403" in error_msg
+            or "429" in error_msg
+            or "proxy" in error_msg.lower()
+        ):
             print_error("Translation service unavailable (network may be blocking external APIs)")
             console.print("\n[dim]Suggestions:[/dim]")
-            console.print("  • Try [cyan]--translator trans[/cyan] for translate-shell CLI (apt install translate-shell)")
+            console.print(
+                "  • Try [cyan]--translator trans[/cyan] for translate-shell CLI (apt install translate-shell)"
+            )
             console.print("  • Try [cyan]--translator ollama[/cyan] for local LLM translation")
             console.print("  • Try [cyan]--translator mymemory[/cyan] for free MyMemory API")
-            console.print("  • Try [cyan]--no-translate[/cyan] to skip translation and output Unicode only")
+            console.print(
+                "  • Try [cyan]--no-translate[/cyan] to skip translation and output Unicode only"
+            )
         else:
             print_error(str(e))
             if not quiet:
@@ -420,7 +458,8 @@ def translate(
 @main.command()
 @click.argument("input_file", type=click.Path(exists=True, path_type=Path))
 @click.option(
-    "-o", "--output",
+    "-o",
+    "--output",
     type=click.Path(path_type=Path),
     help="Output file path for Unicode text.",
 )
@@ -432,8 +471,8 @@ def translate(
 )
 def convert(
     input_file: Path,
-    output: Optional[Path],
-    encoding: Optional[str],
+    output: Path | None,
+    encoding: str | None,
 ):
     """Convert PDF from legacy encoding to Unicode (no translation).
 
@@ -461,6 +500,7 @@ def convert(
             detector = EncodingDetector()
             if encoding:
                 from legacylipi.core.models import DetectionMethod, EncodingDetectionResult
+
                 encoding_result = EncodingDetectionResult(
                     detected_encoding=encoding,
                     confidence=1.0,
@@ -495,12 +535,14 @@ def convert(
 @main.command()
 @click.argument("input_file", type=click.Path(exists=True, path_type=Path))
 @click.option(
-    "-o", "--output",
+    "-o",
+    "--output",
     type=click.Path(path_type=Path),
     help="Output file path. Defaults to input file with new extension.",
 )
 @click.option(
-    "--format", "output_format",
+    "--format",
+    "output_format",
     type=click.Choice(["text", "markdown", "md", "pdf"]),
     default="text",
     help="Output format (text, markdown, or pdf).",
@@ -529,15 +571,16 @@ def convert(
     help="DPI for OCR rendering (higher = better quality but slower). Default: 300",
 )
 @click.option(
-    "--quiet", "-q",
+    "--quiet",
+    "-q",
     is_flag=True,
     help="Suppress progress output.",
 )
 def extract(
     input_file: Path,
-    output: Optional[Path],
+    output: Path | None,
     output_format: str,
-    encoding: Optional[str],
+    encoding: str | None,
     use_ocr: bool,
     ocr_lang: str,
     ocr_dpi: int,
@@ -580,8 +623,10 @@ def extract(
             print_error(f"OCR language '{ocr_lang}' is not available.")
             available_langs = get_available_languages()
             if available_langs:
-                console.print(f"\n[dim]Available languages:[/dim] {', '.join(available_langs[:10])}")
-            console.print(f"\n[dim]To install Marathi language pack:[/dim]")
+                console.print(
+                    f"\n[dim]Available languages:[/dim] {', '.join(available_langs[:10])}"
+                )
+            console.print("\n[dim]To install Marathi language pack:[/dim]")
             console.print("  sudo apt-get install tesseract-ocr-mar")
             sys.exit(1)
 
@@ -612,14 +657,19 @@ def extract(
             if use_ocr:
                 task = progress.add_task(f"Running OCR ({ocr_lang})...", total=None)
                 document = parse_pdf_with_ocr(input_file, lang=ocr_lang, dpi=ocr_dpi)
-                progress.update(task, description=f"[green]✓[/green] OCR extracted {document.page_count} pages")
+                progress.update(
+                    task, description=f"[green]✓[/green] OCR extracted {document.page_count} pages"
+                )
 
                 if not quiet:
-                    console.print(f"\n[dim]📄 Input:[/dim] {input_file.name} ({document.page_count} pages)")
+                    console.print(
+                        f"\n[dim]📄 Input:[/dim] {input_file.name} ({document.page_count} pages)"
+                    )
                     console.print(f"[dim]👁 OCR:[/dim] {ocr_lang} @ {ocr_dpi} DPI")
 
                 # In OCR mode, text is already Unicode
                 from legacylipi.core.models import DetectionMethod, EncodingDetectionResult
+
                 encoding_result = EncodingDetectionResult(
                     detected_encoding="unicode-ocr",
                     confidence=1.0,
@@ -629,10 +679,14 @@ def extract(
             else:
                 task = progress.add_task("Parsing PDF...", total=None)
                 document = parse_pdf(input_file)
-                progress.update(task, description=f"[green]✓[/green] Parsed {document.page_count} pages")
+                progress.update(
+                    task, description=f"[green]✓[/green] Parsed {document.page_count} pages"
+                )
 
                 if not quiet:
-                    console.print(f"\n[dim]📄 Input:[/dim] {input_file.name} ({document.page_count} pages)")
+                    console.print(
+                        f"\n[dim]📄 Input:[/dim] {input_file.name} ({document.page_count} pages)"
+                    )
 
                 # Detect encoding
                 progress.update(task, description="Detecting encoding...")
@@ -640,6 +694,7 @@ def extract(
 
                 if encoding:
                     from legacylipi.core.models import DetectionMethod, EncodingDetectionResult
+
                     encoding_result = EncodingDetectionResult(
                         detected_encoding=encoding,
                         confidence=1.0,
@@ -651,11 +706,13 @@ def extract(
 
                 progress.update(
                     task,
-                    description=f"[green]✓[/green] Encoding: {encoding_result.detected_encoding} ({encoding_result.confidence:.0%})"
+                    description=f"[green]✓[/green] Encoding: {encoding_result.detected_encoding} ({encoding_result.confidence:.0%})",
                 )
 
                 if not quiet:
-                    console.print(f"[dim]🎯 Encoding:[/dim] {encoding_result.detected_encoding} (confidence: {encoding_result.confidence:.0%})")
+                    console.print(
+                        f"[dim]🎯 Encoding:[/dim] {encoding_result.detected_encoding} (confidence: {encoding_result.confidence:.0%})"
+                    )
 
                 # Convert to Unicode
                 progress.update(task, description="Converting to Unicode...")
@@ -711,7 +768,8 @@ def extract(
 @main.command()
 @click.argument("input_file", type=click.Path(exists=True, path_type=Path))
 @click.option(
-    "--verbose", "-v",
+    "--verbose",
+    "-v",
     is_flag=True,
     help="Show detailed page-by-page analysis.",
 )
@@ -744,15 +802,17 @@ def detect(input_file: Path, verbose: bool):
         console.print(f"[bold]📊 Pages:[/bold] {document.page_count}")
 
         # Overall result
-        console.print(f"\n[bold]🎯 Detected Encoding:[/bold]")
+        console.print("\n[bold]🎯 Detected Encoding:[/bold]")
         console.print(f"   Encoding: [cyan]{encoding_result.detected_encoding}[/cyan]")
-        console.print(f"   Confidence: [{'green' if encoding_result.confidence > 0.8 else 'yellow'}]{encoding_result.confidence:.1%}[/]")
+        console.print(
+            f"   Confidence: [{'green' if encoding_result.confidence > 0.8 else 'yellow'}]{encoding_result.confidence:.1%}[/]"
+        )
         console.print(f"   Method: {encoding_result.method.value}")
 
         if encoding_result.is_unicode:
             console.print("\n[green]✓ Document is already in Unicode format.[/green]")
         elif encoding_result.is_legacy:
-            console.print(f"\n[yellow]⚠ Legacy encoding detected.[/yellow]")
+            console.print("\n[yellow]⚠ Legacy encoding detected.[/yellow]")
             console.print(f"   Use: [dim]legacylipi translate {input_file.name}[/dim]")
 
         # Page-by-page analysis if verbose
@@ -791,12 +851,13 @@ def detect(input_file: Path, verbose: bool):
 
 @main.command("encodings")
 @click.option(
-    "--search", "-s",
+    "--search",
+    "-s",
     type=str,
     default=None,
     help="Search for encoding by name.",
 )
-def list_encodings(search: Optional[str]):
+def list_encodings(search: str | None):
     """List supported font encodings.
 
     Shows all font encoding families that LegacyLipi can detect and convert.
@@ -866,15 +927,15 @@ def usage(service: str):
 
     if service == "gcp_translate":
         limit = 500_000
-        remaining = limit - summary['characters']
-        pct = (summary['characters'] / limit) * 100
+        remaining = limit - summary["characters"]
+        pct = (summary["characters"] / limit) * 100
 
         color = "green" if pct < 80 else "yellow" if pct < 100 else "red"
         console.print(f"   Free tier limit: {limit:,}")
         console.print(f"   Remaining: [{color}]{remaining:,}[/]")
         console.print(f"   Usage: [{color}]{pct:.1f}%[/]")
 
-    if summary.get('last_updated'):
+    if summary.get("last_updated"):
         console.print(f"   Last updated: {summary['last_updated']}")
 
 
