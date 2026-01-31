@@ -98,6 +98,7 @@ class TranslationUI:
 
         # UI elements
         self.progress_bar = None
+        self.progress_label = None
         self.status_label = None
         self.download_button = None
         self.translate_button = None
@@ -146,7 +147,9 @@ class TranslationUI:
 
             if latest:
                 completed, total, progress = latest
+                percent = int(progress * 100)
                 self._safe_ui_update(lambda: self.progress_bar.set_value(progress))
+                self._safe_ui_update(lambda p=percent: self.progress_label.set_text(f"{p}%"))
                 self._safe_ui_update(lambda: self.status_label.set_text(f"Translating block {completed}/{total}..."))
         except RuntimeError as e:
             # Handle client disconnection - parent slot deleted
@@ -268,7 +271,8 @@ class TranslationUI:
                         with self.progress_container:
                             ui.icon("hourglass_empty", size="xl", color="primary")
                             self.status_label = ui.label("Starting...").classes("text-lg text-gray-400")
-                            self.progress_bar = ui.linear_progress(value=0, show_value=True).classes("w-full")
+                            self.progress_bar = ui.linear_progress(value=0).classes("w-full")
+                            self.progress_label = ui.label("0%").classes("text-sm text-gray-400")
 
                         # Timer for polling progress queue (100ms interval for smooth updates)
                         self._progress_timer = ui.timer(0.1, callback=self._poll_progress_updates, active=False)
@@ -455,6 +459,7 @@ class TranslationUI:
             try:
                 # Step 1: Parse PDF
                 self.progress_bar.set_value(0.1)
+                self.progress_label.set_text("10%")
                 self.status_label.set_text("Parsing PDF...")
                 await asyncio.sleep(0.1)  # Allow UI to update
 
@@ -494,6 +499,7 @@ class TranslationUI:
 
                     # Step 2: Detect encoding
                     self.progress_bar.set_value(0.2)
+                    self.progress_label.set_text("20%")
                     self.status_label.set_text("Detecting encoding...")
                     await asyncio.sleep(0.1)
 
@@ -506,6 +512,7 @@ class TranslationUI:
 
                     # Step 3: Convert to Unicode
                     self.progress_bar.set_value(0.3)
+                    self.progress_label.set_text("30%")
                     self.status_label.set_text("Converting to Unicode...")
                     await asyncio.sleep(0.1)
 
@@ -518,6 +525,7 @@ class TranslationUI:
 
                 # Step 4: Translate
                 self.progress_bar.set_value(0.4)
+                self.progress_label.set_text("40%")
                 self.status_label.set_text(f"Translating with {self.translator}...")
                 await asyncio.sleep(0.1)
 
@@ -633,6 +641,7 @@ class TranslationUI:
                         raise
 
                 self._safe_ui_update(lambda: self.progress_bar.set_value(0.8))
+                self._safe_ui_update(lambda: self.progress_label.set_text("80%"))
                 self._safe_ui_update(lambda: self.status_label.set_text("Generating output..."))
                 await asyncio.sleep(0.1)
 
@@ -670,6 +679,7 @@ class TranslationUI:
                 self.result_filename = f"{base_name}_translated{ext}"
 
                 self._safe_ui_update(lambda: self.progress_bar.set_value(1.0))
+                self._safe_ui_update(lambda: self.progress_label.set_text("100%"))
                 self._safe_ui_update(lambda: self.status_label.set_text("Complete!"))
 
                 logger.info(
