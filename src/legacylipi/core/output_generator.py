@@ -4,6 +4,7 @@ This module handles generating various output formats from translated content,
 including plain text, Markdown, PDF, and side-by-side bilingual documents.
 """
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -18,6 +19,8 @@ from legacylipi.core.models import (
     TranslationResult,
 )
 from legacylipi.core.utils.text_wrapper import TextWrapper
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -708,8 +711,10 @@ Generated: {metadata.generated_at}"""
         if font_path and Path(font_path).exists():
             try:
                 font = fitz.Font(fontfile=font_path)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(
+                    f"Failed to load font from {font_path}, Devanagari characters may render incorrectly: {e}"
+                )
 
         # Filter valid blocks
         valid_blocks = []
@@ -756,7 +761,6 @@ Generated: {metadata.generated_at}"""
             )
 
             line_height = font_size * 1.2
-            len(wrapped_lines) * line_height
 
             # Calculate starting Y position, checking for collisions
             intended_y_start = bbox.y0 + padding

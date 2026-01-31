@@ -1,13 +1,19 @@
 """OCR-based PDF Parser module.
 
 This module provides OCR-based text extraction from PDF documents.
-It converts PDF pages to images and uses Tesseract OCR to extract
-text, particularly useful for legacy Marathi documents.
+It supports multiple OCR backends:
+- Tesseract OCR (local, free, requires installation)
+- Google Cloud Vision API (cloud, paid, best accuracy for Indian languages)
+- EasyOCR (local, free, GPU-accelerated with PyTorch)
+
+Particularly useful for legacy Marathi and other Indian language documents.
 """
 
+import logging
 import shutil
 import subprocess
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import fitz  # PyMuPDF
 
@@ -18,6 +24,11 @@ from legacylipi.core.models import (
     PDFPage,
     TextBlock,
 )
+
+if TYPE_CHECKING:
+    import numpy as np
+
+logger = logging.getLogger(__name__)
 
 # Check if pytesseract is available
 try:
@@ -63,7 +74,7 @@ def detect_gpu_backend() -> tuple[bool, str]:
         if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             return True, "mps"
     except ImportError:
-        pass
+        logger.warning("PyTorch not available, falling back to CPU for OCR processing")
     return False, "cpu"
 
 
@@ -124,7 +135,8 @@ def get_available_languages() -> list[str]:
         if len(lines) > 1:
             return [lang.strip() for lang in lines[1:] if lang.strip()]
         return []
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to get available OCR languages: {e}")
         return []
 
 
@@ -326,8 +338,11 @@ class OCRParser:
                             "block_num": ocr_data["block_num"][i],
                         }
                     )
-        except Exception:
+        except Exception as e:
             # Fall back to simple text extraction without bounding boxes
+            logger.warning(
+                f"Failed to extract word-level OCR data, falling back to flowing text mode: {e}"
+            )
             word_data = []
 
         return full_text, word_data
@@ -487,7 +502,7 @@ class GoogleVisionOCRParser:
         - Google Cloud credentials (GOOGLE_APPLICATION_CREDENTIALS env var)
         - Vision API enabled in Google Cloud project
 
-    Cost: ~$1.50 per 1000 pages (as of 2024)
+    Cost: ~$1.50 per 1000 pages (see Google Cloud Vision pricing for current rates)
     """
 
     # Default DPI for rendering PDF pages to images
@@ -1084,7 +1099,7 @@ class EasyOCRParser:
             page_count=len(self.doc),
         )
 
-    def render_page_to_numpy(self, page_number: int):
+    def render_page_to_numpy(self, page_number: int) -> "np.ndarray":
         """Render a PDF page to a numpy array for EasyOCR.
 
         Args:
@@ -1218,7 +1233,9 @@ class EasyOCRParser:
         lines: list[list[dict]] = []
         current_line: list[dict] = []
         last_top = -1
-        line_threshold = 30  # Pixels threshold for same line
+        # EasyOCR uses larger text regions than Google Vision, so use a larger
+        # threshold (30px vs 20px in GoogleVisionOCRParser) to group words into lines
+        line_threshold = 30
 
         for word in sorted_words:
             if last_top < 0 or abs(word["top"] - last_top) <= line_threshold:

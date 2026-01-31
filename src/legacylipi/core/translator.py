@@ -899,16 +899,31 @@ class GCPCloudTranslateBackend(TranslationBackendBase):
                 "google-cloud-translate not installed. Install with: "
                 "pip install google-cloud-translate"
             )
+        except UsageLimitExceededError:
+            raise
+        except TranslationError:
+            raise
         except Exception as e:
-            if "UsageLimitExceededError" in str(type(e).__name__):
-                raise
+            # Import GCP exceptions for more specific error handling
+            try:
+                from google.api_core.exceptions import Forbidden, PermissionDenied
+
+                if isinstance(e, (Forbidden, PermissionDenied)):
+                    raise TranslationError(
+                        f"GCP permission denied. Ensure Cloud Translation API is enabled "
+                        f"and credentials are configured: {e}"
+                    ) from e
+            except ImportError:
+                pass
+
+            # Fallback to string matching for cases where google-api-core isn't available
             error_msg = str(e)
             if "403" in error_msg or "permission" in error_msg.lower():
                 raise TranslationError(
                     f"GCP permission denied. Ensure Cloud Translation API is enabled "
                     f"and credentials are configured: {e}"
-                )
-            raise TranslationError(f"GCP translation error: {e}")
+                ) from e
+            raise TranslationError(f"GCP translation error: {e}") from e
 
     async def close(self) -> None:
         """Close the client."""
@@ -1273,7 +1288,9 @@ class TranslationEngine:
         completed = 0
         total = len(translatable_blocks)
 
-        async def translate_single(block: TextBlock) -> None:
+        failed_blocks: list[tuple[int, str]] = []  # Track (index, error_message) for failed blocks
+
+        async def translate_single(block: TextBlock, index: int) -> None:
             nonlocal completed
             async with semaphore:
                 text = block.unicode_text or block.raw_text
@@ -1286,8 +1303,9 @@ class TranslationEngine:
                         # Log the error and keep original text on failure
                         import logging
 
-                        logging.warning(f"Translation failed for block: {e}")
+                        logging.warning(f"Translation failed for block {index + 1}: {e}")
                         block.translated_text = text
+                        failed_blocks.append((index + 1, str(e)))
                 else:
                     block.translated_text = text or ""
 
@@ -1300,7 +1318,16 @@ class TranslationEngine:
                 await asyncio.sleep(0.02)
 
         # Translate all blocks concurrently (with semaphore limiting)
-        await asyncio.gather(*[translate_single(b) for b in translatable_blocks])
+        await asyncio.gather(*[translate_single(b, i) for i, b in enumerate(translatable_blocks)])
+
+        # Report failed blocks to user via logging
+        if failed_blocks:
+            import logging
+
+            logging.warning(
+                f"Translation completed with {len(failed_blocks)} failed block(s) out of {total}. "
+                f"Failed blocks contain original (untranslated) text."
+            )
 
         return blocks
 
