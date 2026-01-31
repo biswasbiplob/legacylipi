@@ -12,6 +12,11 @@ from typing import Optional
 import yaml
 
 from legacylipi.mappings.dvb_tt import get_dvb_tt_mapping, DVB_TT_WORD_PATTERNS
+from legacylipi.mappings.shree_dev import (
+    SHREE_DEV_MAPPINGS,
+    SHREE_DEV_LIGATURES,
+    SHREE_DEV_HALF_FORMS,
+)
 
 
 @dataclass
@@ -333,6 +338,21 @@ BUILTIN_MAPPINGS: dict[str, MappingTable] = {
             "DVBTTSurekhNormal",
             "DVBWTT",
             "DVB-TT-Surekh",
+        ],
+    ),
+    "shree-dev": MappingTable(
+        encoding_name="shree-dev",
+        font_family="SHREE-DEV",
+        language="Marathi",
+        script="Devanagari",
+        mappings=SHREE_DEV_MAPPINGS,
+        ligatures=SHREE_DEV_LIGATURES,
+        half_forms=SHREE_DEV_HALF_FORMS,
+        variants=[
+            "SHREE-DEV-0708",
+            "SHREE-DEV-0714",
+            "SHREE-DEV-0715",
+            "SHREE-DEV-0721",
         ],
     ),
 }

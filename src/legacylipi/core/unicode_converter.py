@@ -215,7 +215,14 @@ class UnicodeConverter:
                 else:
                     new_result.append("\uFFFD")  # Unicode replacement character
 
-        return "".join(new_result), unmapped
+        final_result = "".join(new_result)
+
+        # Apply encoding-specific post-processing
+        if mapping.encoding_name.lower() in ("shree-dev", "shree-dev-0714", "shree-dev-0708"):
+            from legacylipi.mappings.shree_dev import apply_shree_dev_post_processing
+            final_result = apply_shree_dev_post_processing(final_result)
+
+        return final_result, unmapped
 
     def _is_passthrough_char(self, char: str) -> bool:
         """Check if character should pass through unchanged.

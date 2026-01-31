@@ -921,6 +921,193 @@ class GCPCloudTranslateBackend(TranslationBackendBase):
         return self._usage_tracker.get_usage_summary("gcp_translate")
 
 
+class GCPDocumentTranslationBackend(TranslationBackendBase):
+    """Google Cloud Document Translation API backend.
+
+    This backend can translate entire PDF documents directly, including scanned
+    PDFs with legacy fonts. It uses Google's built-in OCR internally and preserves
+    document layout - similar to Google Translate's camera feature.
+
+    This is the recommended approach for PDFs with legacy Indian fonts that
+    render incorrectly with standard text extraction.
+
+    Requires:
+        - google-cloud-translate package (v3+)
+        - GOOGLE_APPLICATION_CREDENTIALS environment variable
+        - Cloud Translation API enabled in GCP project
+
+    Cost: ~$0.08 per page for document translation
+    """
+
+    def __init__(
+        self,
+        project_id: str,
+        location: str = "us-central1",  # Document translation requires specific location
+        timeout: float = 300.0,  # Longer timeout for document processing
+    ):
+        """Initialize GCP Document Translation backend.
+
+        Args:
+            project_id: GCP project ID.
+            location: API location (must be 'us-central1' for document translation).
+            timeout: Request timeout in seconds.
+        """
+        self._project_id = project_id
+        self._location = location
+        self._timeout = timeout
+        self._client = None
+
+    @property
+    def backend_type(self) -> TranslationBackend:
+        return TranslationBackend.GCP_CLOUD
+
+    def _get_client(self):
+        """Get or create Translation client."""
+        if self._client is None:
+            try:
+                from google.cloud import translate_v3beta1 as translate
+
+                self._client = translate.TranslationServiceClient()
+            except ImportError:
+                raise TranslationError(
+                    "google-cloud-translate not installed. Install with: "
+                    "pip install google-cloud-translate"
+                )
+        return self._client
+
+    async def translate(
+        self,
+        text: str,
+        source_lang: str,
+        target_lang: str,
+    ) -> str:
+        """Translate text (falls back to regular text translation).
+
+        For document translation, use translate_document() instead.
+        """
+        # Fall back to regular text translation for plain text
+        try:
+            from google.cloud import translate_v3beta1 as translate
+
+            client = self._get_client()
+            parent = f"projects/{self._project_id}/locations/{self._location}"
+
+            from legacylipi.core.utils.language_codes import get_google_code
+
+            source = get_google_code(source_lang)
+            target = get_google_code(target_lang)
+
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: client.translate_text(
+                    request={
+                        "parent": parent,
+                        "contents": [text],
+                        "source_language_code": source,
+                        "target_language_code": target,
+                        "mime_type": "text/plain",
+                    }
+                ),
+            )
+
+            if not response.translations:
+                raise TranslationError("Empty response from GCP Translation API")
+
+            return response.translations[0].translated_text
+
+        except Exception as e:
+            raise TranslationError(f"GCP translation error: {e}")
+
+    async def translate_document(
+        self,
+        pdf_content: bytes,
+        source_lang: str,
+        target_lang: str,
+    ) -> bytes:
+        """Translate a PDF document directly using Document Translation API.
+
+        This method translates the entire PDF, including scanned pages with
+        legacy fonts. Google's built-in OCR extracts text from the rendered
+        images, translates it, and preserves the document layout.
+
+        Args:
+            pdf_content: PDF file content as bytes.
+            source_lang: Source language code (e.g., 'mr' for Marathi).
+            target_lang: Target language code (e.g., 'en' for English).
+
+        Returns:
+            Translated PDF content as bytes.
+
+        Raises:
+            TranslationError: If translation fails.
+        """
+        try:
+            from google.cloud import translate_v3beta1 as translate
+
+            client = self._get_client()
+            parent = f"projects/{self._project_id}/locations/{self._location}"
+
+            from legacylipi.core.utils.language_codes import get_google_code
+
+            source = get_google_code(source_lang)
+            target = get_google_code(target_lang)
+
+            # Create document input config
+            document_input_config = translate.DocumentInputConfig(
+                content=pdf_content,
+                mime_type="application/pdf",
+            )
+
+            # Create document output config (return as bytes)
+            document_output_config = translate.DocumentOutputConfig(
+                mime_type="application/pdf",
+            )
+
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: client.translate_document(
+                    request={
+                        "parent": parent,
+                        "source_language_code": source,
+                        "target_language_code": target,
+                        "document_input_config": document_input_config,
+                        "document_output_config": document_output_config,
+                    }
+                ),
+            )
+
+            # Get translated document bytes
+            if response.document_translation.byte_stream_outputs:
+                return response.document_translation.byte_stream_outputs[0]
+            else:
+                raise TranslationError("No output from Document Translation API")
+
+        except ImportError:
+            raise TranslationError(
+                "google-cloud-translate not installed. Install with: "
+                "pip install google-cloud-translate"
+            )
+        except Exception as e:
+            error_msg = str(e)
+            if "403" in error_msg or "permission" in error_msg.lower():
+                raise TranslationError(
+                    f"GCP permission denied. Ensure Cloud Translation API is enabled "
+                    f"and credentials are configured: {e}"
+                )
+            elif "400" in error_msg:
+                raise TranslationError(
+                    f"Invalid request to Document Translation API. "
+                    f"Ensure the PDF is valid and under 20MB: {e}"
+                )
+            raise TranslationError(f"GCP document translation error: {e}")
+
+    async def close(self) -> None:
+        """Close the client."""
+        self._client = None
+
+
 class TranslationEngine:
     """Main translation engine with chunking and backend management."""
 
@@ -1113,6 +1300,10 @@ class TranslationEngine:
                 completed += 1
                 if progress_callback:
                     progress_callback(completed, total)
+                # Yield to event loop to allow WebSocket keepalive messages to process
+                # This prevents NiceGUI client disconnection during long translation operations
+                # 20ms yield gives adequate time for WebSocket heartbeat processing
+                await asyncio.sleep(0.02)
 
         # Translate all blocks concurrently (with semaphore limiting)
         await asyncio.gather(*[translate_single(b) for b in translatable_blocks])

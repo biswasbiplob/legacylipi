@@ -4,11 +4,15 @@ A web interface for translating PDFs with legacy Indian font encodings.
 """
 
 import asyncio
+import logging
 import tempfile
 from pathlib import Path
-from typing import Optional
+from queue import Queue, Empty
+from typing import Callable, Optional
 
 from nicegui import ui, app
+
+logger = logging.getLogger(__name__)
 
 # Language options
 TARGET_LANGUAGES = {
@@ -35,6 +39,11 @@ OCR_LANGUAGES = {
     "guj": "Gujarati",
     "pan": "Punjabi",
     "san": "Sanskrit",
+}
+
+OCR_ENGINES = {
+    "easyocr": "EasyOCR (FREE - Recommended)",
+    "tesseract": "Tesseract (FREE - requires install)",
 }
 
 OUTPUT_FORMATS = {
@@ -75,6 +84,7 @@ class TranslationUI:
         self.target_lang = "en"
         self.output_format = "pdf"
         self.use_ocr = False
+        self.ocr_engine = "easyocr"  # Default to free EasyOCR
         self.ocr_lang = "mar"
         self.ocr_dpi = 300
         self.translator = "trans"
@@ -96,6 +106,54 @@ class TranslationUI:
         self.idle_container = None
         self.progress_container = None
         self.complete_container = None
+
+        # Queue-based progress updates to prevent WebSocket disconnection
+        self._progress_queue: Queue = Queue()
+        self._progress_timer = None
+
+    def _safe_ui_update(self, update_fn: Callable[[], None]) -> bool:
+        """Execute UI update, returning False if client disconnected.
+
+        This prevents crashes when async operations try to update UI elements
+        after the browser client has disconnected (tab closed, page refresh, etc.).
+        """
+        try:
+            update_fn()
+            return True
+        except RuntimeError as e:
+            if "deleted" in str(e).lower():
+                logger.warning(f"Client disconnected during UI update: {e}")
+                return False  # Client disconnected, skip update
+            raise  # Re-raise other RuntimeErrors
+
+    def _poll_progress_updates(self):
+        """Poll progress queue and update UI at controlled rate.
+
+        This decouples progress reporting from UI updates, preventing
+        WebSocket disconnection from concurrent callback bursts.
+        """
+        try:
+            if self._progress_queue.empty():
+                return
+
+            # Get latest progress only (skip intermediate updates)
+            latest = None
+            while not self._progress_queue.empty():
+                try:
+                    latest = self._progress_queue.get_nowait()
+                except Empty:
+                    break
+
+            if latest:
+                completed, total, progress = latest
+                self._safe_ui_update(lambda: self.progress_bar.set_value(progress))
+                self._safe_ui_update(lambda: self.status_label.set_text(f"Translating block {completed}/{total}..."))
+        except RuntimeError as e:
+            # Handle client disconnection - parent slot deleted
+            if "deleted" in str(e).lower():
+                logger.debug(f"Timer callback skipped - client disconnected: {e}")
+            else:
+                raise
 
     def build(self):
         """Build the main UI."""
@@ -212,6 +270,9 @@ class TranslationUI:
                             self.status_label = ui.label("Starting...").classes("text-lg text-gray-400")
                             self.progress_bar = ui.linear_progress(value=0, show_value=True).classes("w-full")
 
+                        # Timer for polling progress queue (100ms interval for smooth updates)
+                        self._progress_timer = ui.timer(0.1, callback=self._poll_progress_updates, active=False)
+
                         # Complete state container
                         self.complete_container = ui.column().classes("w-full items-center gap-4")
                         self.complete_container.set_visibility(False)
@@ -234,7 +295,17 @@ class TranslationUI:
             return
 
         with self.ocr_options_container:
-            with ui.row().classes("w-full gap-4"):
+            ui.select(
+                label="OCR Engine",
+                options=OCR_ENGINES,
+                value=self.ocr_engine,
+                on_change=lambda e: setattr(self, "ocr_engine", e.value),
+            ).classes("w-full")
+            ui.label(
+                "EasyOCR: Free, uses deep learning, downloads models on first use (~100MB)"
+            ).classes("text-xs text-gray-500")
+
+            with ui.row().classes("w-full gap-4 mt-2"):
                 ui.select(
                     label="OCR Language",
                     options=OCR_LANGUAGES,
@@ -361,6 +432,12 @@ class TranslationUI:
         self.idle_container.set_visibility(False)
         self.complete_container.set_visibility(False)
 
+        logger.info(
+            f"Starting translation: file={self.uploaded_filename}, "
+            f"translator={self.translator}, mode={self.translation_mode}, "
+            f"output={self.output_format}, ocr={self.use_ocr}, ocr_engine={self.ocr_engine}"
+        )
+
         try:
             # Import here to avoid circular imports and ensure deps are loaded
             from legacylipi.core.encoding_detector import EncodingDetector
@@ -385,13 +462,26 @@ class TranslationUI:
                 loop = asyncio.get_event_loop()
 
                 if self.use_ocr:
-                    from legacylipi.core.ocr_parser import parse_pdf_with_ocr
+                    # Select OCR engine based on user choice
+                    if self.ocr_engine == "easyocr":
+                        from legacylipi.core.ocr_parser import parse_pdf_with_easyocr
 
-                    # Run OCR in executor to avoid blocking the event loop
-                    document = await loop.run_in_executor(
-                        None,
-                        lambda: parse_pdf_with_ocr(input_path, lang=self.ocr_lang, dpi=self.ocr_dpi)
-                    )
+                        self.status_label.set_text("Running EasyOCR (first run downloads models)...")
+                        # Run EasyOCR in executor to avoid blocking the event loop
+                        document = await loop.run_in_executor(
+                            None,
+                            lambda: parse_pdf_with_easyocr(input_path, lang=self.ocr_lang, dpi=self.ocr_dpi)
+                        )
+                    else:
+                        from legacylipi.core.ocr_parser import parse_pdf_with_ocr
+
+                        self.status_label.set_text("Running Tesseract OCR...")
+                        # Run Tesseract in executor to avoid blocking the event loop
+                        document = await loop.run_in_executor(
+                            None,
+                            lambda: parse_pdf_with_ocr(input_path, lang=self.ocr_lang, dpi=self.ocr_dpi)
+                        )
+
                     encoding_result = EncodingDetectionResult(
                         detected_encoding="unicode-ocr",
                         confidence=1.0,
@@ -469,13 +559,22 @@ class TranslationUI:
 
                     if all_blocks:
                         total_blocks = len(all_blocks)
+                        logger.info(f"Structure-preserving mode: {total_blocks} blocks to translate")
                         self.status_label.set_text(f"Translating {total_blocks} text blocks...")
 
-                        # Progress callback for block translation
+                        # Progress callback for block translation - queues updates instead of direct UI calls
+                        # This prevents WebSocket disconnection from concurrent callback bursts
                         def update_progress(completed: int, total: int):
                             progress = 0.4 + (0.4 * completed / total)
-                            self.progress_bar.set_value(progress)
-                            self.status_label.set_text(f"Translating block {completed}/{total}...")
+                            # Log every 50 blocks or at completion
+                            if completed % 50 == 0 or completed == total:
+                                logger.info(f"Translation progress: {completed}/{total} blocks ({progress*100:.1f}%)")
+                            # Queue progress update - timer will poll and update UI at controlled rate
+                            self._progress_queue.put((completed, total, progress))
+
+                        # Start progress timer before translation
+                        if self._progress_timer:
+                            self._progress_timer.active = True
 
                         # Translate blocks concurrently with rate limiting
                         try:
@@ -489,17 +588,17 @@ class TranslationUI:
                             # Check if any blocks were actually translated
                             translated_count = sum(1 for b in all_blocks if b.translated_text and b.translated_text != (b.unicode_text or b.raw_text))
                             if translated_count == 0:
-                                ui.notify("Warning: No blocks were translated. Check API key and model.", type="warning")
+                                self._safe_ui_update(lambda: ui.notify("Warning: No blocks were translated. Check API key and model.", type="warning"))
                         except UsageLimitExceededError as e:
-                            ui.notify(
+                            self._safe_ui_update(lambda e=e: ui.notify(
                                 f"GCP free tier limit exceeded: {e.current_usage:,}/{e.limit:,} chars. "
                                 f"Need {e.requested:,} more. Try a different translator.",
                                 type="warning",
                                 timeout=10000,
-                            )
+                            ))
                             raise
                         except Exception as e:
-                            ui.notify(f"Translation error: {e}", type="negative")
+                            self._safe_ui_update(lambda e=e: ui.notify(f"Translation error: {e}", type="negative"))
                             raise
                     else:
                         # No positioned blocks - fall back to flowing mode
@@ -520,21 +619,21 @@ class TranslationUI:
                             lambda: engine.translate(unicode_text, source_lang="mr", target_lang=self.target_lang),
                         )
                         if not translation_result or not translation_result.translated_text:
-                            ui.notify("Warning: Translation returned empty result. Check API key and model.", type="warning")
+                            self._safe_ui_update(lambda: ui.notify("Warning: Translation returned empty result. Check API key and model.", type="warning"))
                     except UsageLimitExceededError as e:
-                        ui.notify(
+                        self._safe_ui_update(lambda e=e: ui.notify(
                             f"GCP free tier limit exceeded: {e.current_usage:,}/{e.limit:,} chars. "
                             f"Need {e.requested:,} more. Try a different translator.",
                             type="warning",
                             timeout=10000,
-                        )
+                        ))
                         raise
                     except Exception as e:
-                        ui.notify(f"Translation error: {e}", type="negative")
+                        self._safe_ui_update(lambda e=e: ui.notify(f"Translation error: {e}", type="negative"))
                         raise
 
-                self.progress_bar.set_value(0.8)
-                self.status_label.set_text("Generating output...")
+                self._safe_ui_update(lambda: self.progress_bar.set_value(0.8))
+                self._safe_ui_update(lambda: self.status_label.set_text("Generating output..."))
                 await asyncio.sleep(0.1)
 
                 # Step 5: Generate output
@@ -570,25 +669,49 @@ class TranslationUI:
                 base_name = Path(self.uploaded_filename).stem
                 self.result_filename = f"{base_name}_translated{ext}"
 
-                self.progress_bar.set_value(1.0)
-                self.status_label.set_text("Complete!")
+                self._safe_ui_update(lambda: self.progress_bar.set_value(1.0))
+                self._safe_ui_update(lambda: self.status_label.set_text("Complete!"))
 
-                ui.notify("Translation completed successfully!", type="positive")
-                self.complete_container.set_visibility(True)
+                logger.info(
+                    f"Translation completed successfully: output={self.result_filename}, "
+                    f"size={len(self.result_content)} bytes"
+                )
+
+                self._safe_ui_update(lambda: ui.notify("Translation completed successfully!", type="positive"))
+                self._safe_ui_update(lambda: self.complete_container.set_visibility(True))
 
             finally:
                 # Clean up temp file
                 input_path.unlink(missing_ok=True)
 
         except Exception as e:
-            ui.notify(f"Translation failed: {str(e)}", type="negative")
-            self.status_label.set_text(f"Error: {str(e)}")
+            logger.error(
+                f"Translation failed: {e}",
+                exc_info=True,
+                extra={
+                    "file": self.uploaded_filename,
+                    "translator": self.translator,
+                    "mode": self.translation_mode,
+                }
+            )
+            self._safe_ui_update(lambda e=e: ui.notify(f"Translation failed: {str(e)}", type="negative"))
+            self._safe_ui_update(lambda e=e: self.status_label.set_text(f"Error: {str(e)}"))
             # Show idle state again on error so user can retry
-            self.idle_container.set_visibility(True)
+            self._safe_ui_update(lambda: self.idle_container.set_visibility(True))
 
         finally:
             self.is_translating = False
-            self.translate_button.enable()
+            # Stop progress timer
+            if self._progress_timer:
+                self._progress_timer.active = False
+            # Clear any remaining items in progress queue
+            while not self._progress_queue.empty():
+                try:
+                    self._progress_queue.get_nowait()
+                except Empty:
+                    break
+            logger.debug("Translation task finished, re-enabling UI")
+            self._safe_ui_update(lambda: self.translate_button.enable())
 
     def _download_result(self):
         """Trigger download of the result file."""
@@ -598,6 +721,13 @@ class TranslationUI:
 
 def main():
     """Main entry point for the UI."""
+    # Configure logging to show in terminal
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    logger.info("Starting LegacyLipi UI server...")
 
     @ui.page("/")
     def index():
@@ -611,6 +741,7 @@ def main():
         port=8080,
         reload=False,
         show=True,
+        reconnect_timeout=30.0,  # Increased from default 3s to handle long translations
     )
 
 

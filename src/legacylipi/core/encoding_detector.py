@@ -52,11 +52,20 @@ UNICODE_FONT_PATTERNS = [
 # Database of known legacy font patterns
 LEGACY_FONT_PATTERNS: list[LegacyFontPattern] = [
     LegacyFontPattern(
-        encoding_name="shree-lipi",
+        encoding_name="shree-dev",
         patterns=[
             r"shree[-_\s]*dev[-_\s]*07\d{2}",
-            r"shree[-_\s]*lipi",
+            r"shree[-_\s]*dev[-_\s]*\d+",
             r"shree[-_\s]*dev",
+        ],
+        # Signatures based on common SHREE-DEV character sequences
+        signatures=["CP", "BP", "KP", "PR", "ÀP", "ÁP", "ÌP", "mP", "rP", "Am"],
+        priority=10,  # Higher priority for specific SHREE-DEV fonts
+    ),
+    LegacyFontPattern(
+        encoding_name="shree-lipi",
+        patterns=[
+            r"shree[-_\s]*lipi",
             r"sdl[-_\s]*dev",
         ],
         signatures=["´Ö", "Æü", "Ö¸ü", "®Ö", "ÖμÖ", "ÖÂ", "™Òü", "×", "†"],
@@ -302,7 +311,7 @@ class EncodingDetector:
                 detected_encoding="unknown-legacy",
                 confidence=0.50,
                 method=DetectionMethod.HEURISTIC,
-                fallback_encodings=["shree-lipi", "kruti-dev"],
+                fallback_encodings=["shree-dev", "shree-lipi", "kruti-dev"],
             )
 
         return EncodingDetectionResult(
