@@ -88,35 +88,41 @@ tests/
 
 ## Adding a New Encoding
 
-### 1. Create a Mapping File
+### 1. Add Mapping to loader.py
 
-Create a mapping file in `data/mappings/` (YAML or JSON):
+Add your character mappings to `src/legacylipi/mappings/loader.py`:
 
-```yaml
-# data/mappings/my-font.yaml
-metadata:
-  font_family: "My Font"
-  language: "Hindi"
-  script: "Devanagari"
-  version: "1.0"
+```python
+# Define your mapping dictionaries
+MY_FONT_MAPPINGS = {
+    "a": "अ",
+    "b": "ब",
+    # ... more character mappings
+}
 
-mappings:
-  "a": "अ"
-  "b": "ब"
-  # ... more character mappings
+MY_FONT_LIGATURES = {
+    "ksh": "क्ष",
+    # ... ligature mappings
+}
 
-ligatures:
-  "ksh": "क्ष"
-  # ... ligature mappings
-
-half_forms:
-  "k~": "क्"
-  # ... half form mappings
+# Add to BUILTIN_MAPPINGS dict at the bottom of the file
+BUILTIN_MAPPINGS: dict[str, MappingTable] = {
+    # ... existing mappings ...
+    "my-font": MappingTable(
+        encoding_name="my-font",
+        font_family="My Font",
+        language="Hindi",
+        script="Devanagari",
+        mappings=MY_FONT_MAPPINGS,
+        ligatures=MY_FONT_LIGATURES,
+        variants=["MyFont-Regular", "MyFont-Bold"],
+    ),
+}
 ```
 
 ### 2. Add Font Detection Pattern
 
-Add font name patterns to `encoding_detector.py`:
+Add font name patterns to `src/legacylipi/core/encoding_detector.py`:
 
 ```python
 LegacyFontPattern(

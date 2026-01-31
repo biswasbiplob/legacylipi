@@ -34,7 +34,6 @@ class TranslationBackend(str, Enum):
     MYMEMORY = "mymemory"
     OLLAMA = "ollama"
     OPENAI = "openai"
-    DEEPL = "deepl"
     GCP_CLOUD = "gcp_cloud"
     MOCK = "mock"  # For testing
 

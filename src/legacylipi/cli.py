@@ -12,6 +12,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
+from legacylipi import __version__
 from legacylipi.core.encoding_detector import EncodingDetector, detect_encoding
 from legacylipi.core.models import OutputFormat
 from legacylipi.core.ocr_parser import (
@@ -35,7 +36,7 @@ console = Console()
 
 def print_banner():
     """Print the LegacyLipi banner."""
-    console.print("\n[bold blue]LegacyLipi[/bold blue] v0.1.0", style="bold")
+    console.print(f"\n[bold blue]LegacyLipi[/bold blue] v{__version__}", style="bold")
     console.print("[dim]Legacy Font PDF Translator[/dim]")
     console.print("─" * 50)
 
