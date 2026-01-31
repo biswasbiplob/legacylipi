@@ -116,6 +116,21 @@ uv run python -m legacylipi.ui.app    # Web UI
 uv run python -m legacylipi.cli       # CLI
 ```
 
+## Pre-Commit Checks
+
+**IMPORTANT:** Always run the pre-commit checks before committing changes:
+
+```bash
+./scripts/check.sh
+```
+
+This runs:
+1. **Linting** - `ruff check src/`
+2. **Type checking** - `mypy src/legacylipi`
+3. **Tests** - `pytest tests/ -v`
+
+Only commit if all checks pass. CI will run the same checks on PRs.
+
 ## Dependencies
 
 - `pymupdf` (fitz): PDF parsing and generation
