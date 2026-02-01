@@ -52,11 +52,6 @@ OUTPUT_FORMATS = {
     "markdown": "Markdown",
 }
 
-# Output formats for convert mode (no PDF)
-OUTPUT_FORMATS_CONVERT = {
-    "text": "Text",
-    "markdown": "Markdown",
-}
 
 TRANSLATORS = {
     "trans": "Translate-Shell (CLI) - Recommended",
@@ -234,22 +229,15 @@ class TranslationUI:
             self._build_ocr_options()
 
     def _rebuild_output_format_options(self):
-        """Rebuild output format dropdown based on workflow mode."""
+        """Rebuild output format dropdown based on workflow mode.
+
+        All modes support PDF, text, and markdown output formats.
+        PDF is the default format.
+        """
         if not self.output_format_select:
             return
-
-        is_convert = self.workflow_mode == "convert"
-
-        if is_convert:
-            # Convert mode: only text and markdown
-            self.output_format_select.options = OUTPUT_FORMATS_CONVERT
-            # If current format is PDF, switch to text
-            if self.output_format == "pdf":
-                self.output_format = "text"
-                self.output_format_select.value = "text"
-        else:
-            # Translate mode: all formats including PDF
-            self.output_format_select.options = OUTPUT_FORMATS
+        # All modes use the same output formats (PDF is default)
+        self.output_format_select.options = OUTPUT_FORMATS
         self.output_format_select.update()
 
     def _update_action_button(self):
