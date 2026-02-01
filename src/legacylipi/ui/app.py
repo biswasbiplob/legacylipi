@@ -84,6 +84,7 @@ class TranslationUI:
         self.target_lang = "en"
         self.output_format = "pdf"
         self.use_ocr = False
+        self.ocr_only_mode = False  # Skip translation, output OCR text only
         self.ocr_engine = "easyocr"  # Default to free EasyOCR
         self.ocr_lang = "mar"
         self.ocr_dpi = 300
@@ -346,11 +347,41 @@ class TranslationUI:
                     else None,
                 ).classes("flex-1")
 
+            # OCR-only mode option
+            ui.checkbox(
+                "OCR Only (No Translation)",
+                value=self.ocr_only_mode,
+                on_change=self._toggle_ocr_only,
+            ).classes("mt-2")
+            ui.label("Extract text via OCR and output readable Unicode - no translation").classes(
+                "text-xs text-gray-500"
+            )
+
     def _toggle_ocr(self, e):
         """Toggle OCR mode."""
         self.use_ocr = e.value
+        # Reset OCR-only mode when OCR is disabled
+        if not self.use_ocr:
+            self.ocr_only_mode = False
+            self._update_button_label()
         self._build_ocr_options()
         self.ocr_options_container.update()
+
+    def _toggle_ocr_only(self, e):
+        """Toggle OCR-only mode (no translation)."""
+        self.ocr_only_mode = e.value
+        self._update_button_label()
+
+    def _update_button_label(self):
+        """Update translate button label based on mode."""
+        if self.translate_button:
+            if self.ocr_only_mode:
+                self.translate_button.text = "Convert"
+                self.translate_button._props["icon"] = "text_format"
+            else:
+                self.translate_button.text = "Translate"
+                self.translate_button._props["icon"] = "translate"
+            self.translate_button.update()
 
     def _build_translator_options(self):
         """Build translator-specific options based on selected translator."""
@@ -561,104 +592,165 @@ class TranslationUI:
                         lambda: converter.convert_document(document, page_encodings=page_encodings),
                     )
 
-                # Step 4: Translate
-                self._safe_ui_update(lambda: self.progress_bar.set_value(0.4))
-                self._safe_ui_update(lambda: self.progress_label.set_text("40%"))
-                self._safe_ui_update(
-                    lambda: self.status_label.set_text(f"Translating with {self.translator}...")
-                )
-                await asyncio.sleep(0.1)
-
-                # Build translator kwargs
-                translator_kwargs = {}
-                if self.translator == "openai":
-                    translator_kwargs["api_key"] = self.openai_key
-                    translator_kwargs["model"] = self.openai_model
-                elif self.translator == "ollama":
-                    translator_kwargs["model"] = self.ollama_model
-                    if self.ollama_host:
-                        translator_kwargs["host"] = self.ollama_host
-                elif self.translator == "trans" and self.trans_path:
-                    translator_kwargs["trans_path"] = self.trans_path
-                elif self.translator == "gcp_cloud":
-                    import os
-
-                    project_id = self.gcp_project or os.environ.get("GCP_PROJECT_ID")
-                    if project_id:
-                        translator_kwargs["project_id"] = project_id
-
-                engine = create_translator(self.translator, **translator_kwargs)
-
-                # Check translation mode
-                use_structure_preserving = (
-                    self.translation_mode == "structure_preserving" and self.output_format == "pdf"
-                )
-
+                # Step 4: Translate (skip if OCR-only mode)
                 translation_result = None
+                use_structure_preserving = False
 
-                if use_structure_preserving:
-                    # Structure-preserving mode: translate each block individually
-                    # Collect all blocks with position data
-                    all_blocks = []
-                    for page in converted_doc.pages:
-                        for block in page.text_blocks:
-                            if block.position is not None:
-                                all_blocks.append(block)
-
-                    if all_blocks:
-                        total_blocks = len(all_blocks)
-                        logger.info(
-                            f"Structure-preserving mode: {total_blocks} blocks to translate"
+                if self.ocr_only_mode:
+                    # OCR-only mode: skip translation, output Unicode text directly
+                    self._safe_ui_update(lambda: self.progress_bar.set_value(0.7))
+                    self._safe_ui_update(lambda: self.progress_label.set_text("70%"))
+                    self._safe_ui_update(
+                        lambda: self.status_label.set_text(
+                            "Skipping translation (OCR-only mode)..."
                         )
-                        self._safe_ui_update(
-                            lambda: self.status_label.set_text(
-                                f"Translating {total_blocks} text blocks..."
+                    )
+                    logger.info("OCR-only mode: skipping translation step")
+                    await asyncio.sleep(0.1)
+                else:
+                    # Normal translation flow
+                    self._safe_ui_update(lambda: self.progress_bar.set_value(0.4))
+                    self._safe_ui_update(lambda: self.progress_label.set_text("40%"))
+                    self._safe_ui_update(
+                        lambda: self.status_label.set_text(f"Translating with {self.translator}...")
+                    )
+                    await asyncio.sleep(0.1)
+
+                    # Build translator kwargs
+                    translator_kwargs = {}
+                    if self.translator == "openai":
+                        translator_kwargs["api_key"] = self.openai_key
+                        translator_kwargs["model"] = self.openai_model
+                    elif self.translator == "ollama":
+                        translator_kwargs["model"] = self.ollama_model
+                        if self.ollama_host:
+                            translator_kwargs["host"] = self.ollama_host
+                    elif self.translator == "trans" and self.trans_path:
+                        translator_kwargs["trans_path"] = self.trans_path
+                    elif self.translator == "gcp_cloud":
+                        import os
+
+                        project_id = self.gcp_project or os.environ.get("GCP_PROJECT_ID")
+                        if project_id:
+                            translator_kwargs["project_id"] = project_id
+
+                    engine = create_translator(self.translator, **translator_kwargs)
+
+                    # Check translation mode
+                    use_structure_preserving = (
+                        self.translation_mode == "structure_preserving"
+                        and self.output_format == "pdf"
+                    )
+
+                    if use_structure_preserving:
+                        # Structure-preserving mode: translate each block individually
+                        # Collect all blocks with position data
+                        all_blocks = []
+                        for page in converted_doc.pages:
+                            for block in page.text_blocks:
+                                if block.position is not None:
+                                    all_blocks.append(block)
+
+                        if all_blocks:
+                            total_blocks = len(all_blocks)
+                            logger.info(
+                                f"Structure-preserving mode: {total_blocks} blocks to translate"
                             )
-                        )
-
-                        # Progress callback for block translation - queues updates instead of direct UI calls
-                        # This prevents WebSocket disconnection from concurrent callback bursts
-                        def update_progress(completed: int, total: int):
-                            progress = 0.4 + (0.4 * completed / total)
-                            # Log every 50 blocks or at completion
-                            if completed % 50 == 0 or completed == total:
-                                logger.info(
-                                    f"Translation progress: {completed}/{total} blocks ({progress * 100:.1f}%)"
+                            self._safe_ui_update(
+                                lambda: self.status_label.set_text(
+                                    f"Translating {total_blocks} text blocks..."
                                 )
-                            # Queue progress update - timer will poll and update UI at controlled rate
-                            self._progress_queue.put((completed, total, progress))
+                            )
 
-                        # Start progress timer before translation
-                        if self._progress_timer:
-                            self._progress_timer.active = True
+                            # Progress callback for block translation
+                            def update_progress(completed: int, total: int):
+                                progress = 0.4 + (0.4 * completed / total)
+                                if completed % 50 == 0 or completed == total:
+                                    logger.info(
+                                        f"Translation progress: {completed}/{total} blocks "
+                                        f"({progress * 100:.1f}%)"
+                                    )
+                                self._progress_queue.put((completed, total, progress))
 
-                        # Translate blocks concurrently with rate limiting
+                            # Start progress timer before translation
+                            if self._progress_timer:
+                                self._progress_timer.active = True
+
+                            # Translate blocks concurrently with rate limiting
+                            try:
+                                await engine.translate_blocks_async(
+                                    all_blocks,
+                                    source_lang="mr",
+                                    target_lang=self.target_lang,
+                                    max_concurrent=3,
+                                    progress_callback=update_progress,
+                                )
+                                # Check if any blocks were actually translated
+                                translated_count = sum(
+                                    1
+                                    for b in all_blocks
+                                    if b.translated_text
+                                    and b.translated_text != (b.unicode_text or b.raw_text)
+                                )
+                                if translated_count == 0:
+                                    self._safe_ui_update(
+                                        lambda: ui.notify(
+                                            "Warning: No blocks were translated. "
+                                            "Check API key and model.",
+                                            type="warning",
+                                        )
+                                    )
+                            except UsageLimitExceededError as e:
+                                self._safe_ui_update(
+                                    lambda e=e: ui.notify(
+                                        f"GCP free tier limit exceeded: "
+                                        f"{e.current_usage:,}/{e.limit:,} chars. "
+                                        f"Need {e.requested:,} more. Try a different translator.",
+                                        type="warning",
+                                        timeout=10000,
+                                    )
+                                )
+                                raise
+                            except Exception as e:
+                                self._safe_ui_update(
+                                    lambda e=e: ui.notify(
+                                        f"Translation error: {e}", type="negative"
+                                    )
+                                )
+                                raise
+                        else:
+                            # No positioned blocks - fall back to flowing mode
+                            use_structure_preserving = False
+
+                    if not use_structure_preserving:
+                        # Flowing mode: combine text and translate as one string
+                        text_parts = []
+                        for i, page in enumerate(converted_doc.pages, 1):
+                            page_text = page.unicode_text
+                            text_parts.append(f"--- Page {i} ---\n{page_text}")
+                        unicode_text = "\n\n".join(text_parts)
+
+                        # Run translation (this is sync, wrap in executor)
                         try:
-                            await engine.translate_blocks_async(
-                                all_blocks,
-                                source_lang="mr",
-                                target_lang=self.target_lang,
-                                max_concurrent=3,
-                                progress_callback=update_progress,
+                            translation_result = await loop.run_in_executor(
+                                None,
+                                lambda: engine.translate(
+                                    unicode_text, source_lang="mr", target_lang=self.target_lang
+                                ),
                             )
-                            # Check if any blocks were actually translated
-                            translated_count = sum(
-                                1
-                                for b in all_blocks
-                                if b.translated_text
-                                and b.translated_text != (b.unicode_text or b.raw_text)
-                            )
-                            if translated_count == 0:
+                            if not translation_result or not translation_result.translated_text:
                                 self._safe_ui_update(
                                     lambda: ui.notify(
-                                        "Warning: No blocks were translated. Check API key and model.",
+                                        "Warning: Translation returned empty result. "
+                                        "Check API key and model.",
                                         type="warning",
                                     )
                                 )
                         except UsageLimitExceededError as e:
                             self._safe_ui_update(
                                 lambda e=e: ui.notify(
-                                    f"GCP free tier limit exceeded: {e.current_usage:,}/{e.limit:,} chars. "
+                                    f"GCP free tier limit exceeded: "
+                                    f"{e.current_usage:,}/{e.limit:,} chars. "
                                     f"Need {e.requested:,} more. Try a different translator.",
                                     type="warning",
                                     timeout=10000,
@@ -670,48 +762,6 @@ class TranslationUI:
                                 lambda e=e: ui.notify(f"Translation error: {e}", type="negative")
                             )
                             raise
-                    else:
-                        # No positioned blocks - fall back to flowing mode
-                        use_structure_preserving = False
-
-                if not use_structure_preserving:
-                    # Flowing mode: combine text and translate as one string
-                    text_parts = []
-                    for i, page in enumerate(converted_doc.pages, 1):
-                        page_text = page.unicode_text
-                        text_parts.append(f"--- Page {i} ---\n{page_text}")
-                    unicode_text = "\n\n".join(text_parts)
-
-                    # Run translation (this is sync, wrap in executor)
-                    try:
-                        translation_result = await loop.run_in_executor(
-                            None,
-                            lambda: engine.translate(
-                                unicode_text, source_lang="mr", target_lang=self.target_lang
-                            ),
-                        )
-                        if not translation_result or not translation_result.translated_text:
-                            self._safe_ui_update(
-                                lambda: ui.notify(
-                                    "Warning: Translation returned empty result. Check API key and model.",
-                                    type="warning",
-                                )
-                            )
-                    except UsageLimitExceededError as e:
-                        self._safe_ui_update(
-                            lambda e=e: ui.notify(
-                                f"GCP free tier limit exceeded: {e.current_usage:,}/{e.limit:,} chars. "
-                                f"Need {e.requested:,} more. Try a different translator.",
-                                type="warning",
-                                timeout=10000,
-                            )
-                        )
-                        raise
-                    except Exception as e:
-                        self._safe_ui_update(
-                            lambda e=e: ui.notify(f"Translation error: {e}", type="negative")
-                        )
-                        raise
 
                 self._safe_ui_update(lambda: self.progress_bar.set_value(0.8))
                 self._safe_ui_update(lambda: self.progress_label.set_text("80%"))
@@ -753,19 +803,22 @@ class TranslationUI:
                 ext_map = {"pdf": ".pdf", "text": ".txt", "markdown": ".md"}
                 ext = ext_map.get(self.output_format, ".txt")
                 base_name = Path(self.uploaded_filename).stem
-                self.result_filename = f"{base_name}_translated{ext}"
+                # Use "_converted" suffix for OCR-only mode, "_translated" otherwise
+                suffix = "_converted" if self.ocr_only_mode else "_translated"
+                self.result_filename = f"{base_name}{suffix}{ext}"
 
                 self._safe_ui_update(lambda: self.progress_bar.set_value(1.0))
                 self._safe_ui_update(lambda: self.progress_label.set_text("100%"))
                 self._safe_ui_update(lambda: self.status_label.set_text("Complete!"))
 
+                action = "Conversion" if self.ocr_only_mode else "Translation"
                 logger.info(
-                    f"Translation completed successfully: output={self.result_filename}, "
+                    f"{action} completed successfully: output={self.result_filename}, "
                     f"size={len(self.result_content)} bytes"
                 )
 
                 self._safe_ui_update(
-                    lambda: ui.notify("Translation completed successfully!", type="positive")
+                    lambda a=action: ui.notify(f"{a} completed successfully!", type="positive")
                 )
                 self._safe_ui_update(lambda: self.complete_container.set_visibility(True))
 

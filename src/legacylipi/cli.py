@@ -130,6 +130,11 @@ def main():
     help="Skip translation, only convert to Unicode.",
 )
 @click.option(
+    "--ocr-only",
+    is_flag=True,
+    help="OCR extraction only, no translation (implies --use-ocr --no-translate).",
+)
+@click.option(
     "--use-ocr",
     is_flag=True,
     help="Use OCR to extract text from PDF (useful for scanned documents or legacy fonts).",
@@ -169,6 +174,7 @@ def translate(
     gcp_project: str | None,
     force_translate: bool,
     no_translate: bool,
+    ocr_only: bool,
     use_ocr: bool,
     ocr_lang: str,
     ocr_dpi: int,
@@ -184,6 +190,11 @@ def translate(
     4. Translate to target language
     5. Output to specified format
     """
+    # Handle --ocr-only convenience flag
+    if ocr_only:
+        use_ocr = True
+        no_translate = True
+
     if not quiet:
         print_banner()
 

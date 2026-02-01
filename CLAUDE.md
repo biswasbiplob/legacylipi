@@ -3,6 +3,14 @@
 ## Project Overview
 LegacyLipi is a PDF translator for legacy Indian font encodings (Marathi, Hindi, Tamil, etc.). It converts PDFs with legacy encodings to Unicode and translates them to various target languages.
 
+## Development Guidelines
+
+### Feature Branches
+**Always create new features in feature branches** so that we have a PR for everything new.
+- Branch naming: `feature/<feature-name>` (e.g., `feature/ocr-only-mode`)
+- Create PR after implementation is complete
+- Never commit directly to `main` for new features
+
 ## Project Structure
 ```
 legacylipi/
