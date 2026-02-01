@@ -583,6 +583,68 @@ class TestScanCopyCommand:
         assert "Output:" in result.output
         assert "KB" in result.output
 
+    def test_scan_copy_with_quality(self, runner, sample_pdf, temp_dir):
+        """Test scan-copy with quality option."""
+        output_path = temp_dir / "scanned.pdf"
+
+        result = runner.invoke(main, [
+            "scan-copy",
+            str(sample_pdf),
+            "-o", str(output_path),
+            "--quality", "70",
+        ])
+
+        assert result.exit_code == 0
+        assert output_path.exists()
+
+    def test_scan_copy_quality_affects_size(self, runner, sample_pdf, temp_dir):
+        """Test that quality option affects output file size."""
+        output_high = temp_dir / "high_quality.pdf"
+        output_low = temp_dir / "low_quality.pdf"
+
+        # High quality
+        result = runner.invoke(main, [
+            "scan-copy",
+            str(sample_pdf),
+            "-o", str(output_high),
+            "--quality", "95",
+        ])
+        assert result.exit_code == 0
+
+        # Low quality
+        result = runner.invoke(main, [
+            "scan-copy",
+            str(sample_pdf),
+            "-o", str(output_low),
+            "--quality", "50",
+        ])
+        assert result.exit_code == 0
+
+        # Lower quality should produce smaller file
+        assert output_low.stat().st_size < output_high.stat().st_size
+
+    def test_scan_copy_quality_validation(self, runner, sample_pdf, temp_dir):
+        """Test that quality option validates range (1-100)."""
+        output_path = temp_dir / "scanned.pdf"
+
+        # Quality too low (0)
+        result = runner.invoke(main, [
+            "scan-copy",
+            str(sample_pdf),
+            "-o", str(output_path),
+            "--quality", "0",
+        ])
+        assert result.exit_code != 0
+
+        # Quality too high (101)
+        result = runner.invoke(main, [
+            "scan-copy",
+            str(sample_pdf),
+            "-o", str(output_path),
+            "--quality", "101",
+        ])
+        assert result.exit_code != 0
+
 
 class TestErrorHandling:
     """Tests for error handling in CLI."""

@@ -881,3 +881,50 @@ class TestScannedCopy:
 
         assert isinstance(output, bytes)
         assert output.startswith(b"%PDF")
+
+    def test_generate_scanned_copy_quality_reduces_size(self, sample_pdf_file):
+        """Test that lower quality produces smaller files."""
+        generator = OutputGenerator()
+
+        # High quality (larger file)
+        output_high = generator.generate_scanned_copy(
+            input_path=sample_pdf_file,
+            quality=95,
+        )
+
+        # Low quality (smaller file)
+        output_low = generator.generate_scanned_copy(
+            input_path=sample_pdf_file,
+            quality=50,
+        )
+
+        # Both should be valid PDFs
+        assert output_high.startswith(b"%PDF")
+        assert output_low.startswith(b"%PDF")
+
+        # Lower quality should produce smaller file
+        assert len(output_low) < len(output_high)
+
+    def test_generate_scanned_copy_quality_parameter(self, sample_pdf_file):
+        """Test that quality parameter is accepted and produces valid PDF."""
+        generator = OutputGenerator()
+
+        # Test various quality levels
+        for quality in [1, 50, 85, 100]:
+            output = generator.generate_scanned_copy(
+                input_path=sample_pdf_file,
+                quality=quality,
+            )
+            assert isinstance(output, bytes)
+            assert output.startswith(b"%PDF")
+            assert b"%%EOF" in output
+
+    def test_generate_scanned_copy_default_quality(self, sample_pdf_file):
+        """Test that default quality (85) produces valid PDF."""
+        generator = OutputGenerator()
+
+        # Call without quality parameter - should use default (85)
+        output = generator.generate_scanned_copy(input_path=sample_pdf_file)
+
+        assert isinstance(output, bytes)
+        assert output.startswith(b"%PDF")
