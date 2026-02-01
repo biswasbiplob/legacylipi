@@ -981,15 +981,20 @@ class TranslationUI:
             ui.download(self.result_content, self.result_filename)
 
 
-def main():
-    """Main entry point for the UI."""
-    # Configure logging to show in terminal
+def run_ui(port: int = 8080, host: str = "0.0.0.0", show: bool = True):
+    """Run the UI server with configurable options.
+
+    Args:
+        port: Port to run the server on (default: 8080)
+        host: Host to bind to (default: 0.0.0.0)
+        show: Whether to open browser automatically (default: True)
+    """
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
-    logger.info("Starting LegacyLipi UI server...")
+    logger.info(f"Starting LegacyLipi UI server on {host}:{port}...")
 
     @ui.page("/")
     def index():
@@ -1000,11 +1005,17 @@ def main():
 
     ui.run(
         title="LegacyLipi - PDF Translator",
-        port=8080,
+        host=host,
+        port=port,
         reload=False,
-        show=True,
+        show=show,
         reconnect_timeout=30.0,  # Increased from default 3s to handle long translations
     )
+
+
+def main():
+    """Main entry point for the UI (standalone command)."""
+    run_ui()
 
 
 if __name__ == "__main__":
