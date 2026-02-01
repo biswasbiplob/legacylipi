@@ -2,6 +2,41 @@
 
 **Legacy Font PDF Translator** - Translate PDF documents with legacy Indian font encodings to English.
 
+## Installation
+
+### From PyPI (Recommended)
+
+```bash
+pip install legacylipi
+```
+
+Or with uv:
+
+```bash
+uv tool install legacylipi
+```
+
+### From Source
+
+```bash
+git clone https://github.com/biswasbiplob/legacylipi.git
+cd legacylipi
+uv sync
+```
+
+### Usage
+
+```bash
+# CLI translation
+legacylipi translate input.pdf -o output.txt
+
+# Launch web UI
+legacylipi ui
+
+# Launch UI on custom port
+legacylipi ui --port 3000
+```
+
 ## Problem
 
 Millions of government documents, legal papers, and archival materials in Indian regional languages (Marathi, Hindi, Tamil, etc.) were created using legacy font encoding systems (Shree-Lipi, Kruti Dev, APS, Chanakya, etc.). These fonts map Devanagari/regional script glyphs to ASCII/Latin code points, making them unreadable by standard translation tools.
