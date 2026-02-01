@@ -471,6 +471,119 @@ class TestExtractCommand:
         assert "Font-based" in result.output
 
 
+class TestScanCopyCommand:
+    """Tests for the scan-copy command."""
+
+    def test_scan_copy_basic(self, runner, sample_pdf, temp_dir):
+        """Test basic scanned copy creation."""
+        output_path = temp_dir / "scanned.pdf"
+
+        result = runner.invoke(main, [
+            "scan-copy",
+            str(sample_pdf),
+            "-o", str(output_path),
+        ])
+
+        assert result.exit_code == 0
+        assert output_path.exists()
+        # Verify it's a valid PDF
+        content = output_path.read_bytes()
+        assert content.startswith(b"%PDF")
+
+    def test_scan_copy_default_output(self, runner, sample_pdf):
+        """Test scan-copy creates default output filename."""
+        result = runner.invoke(main, [
+            "scan-copy",
+            str(sample_pdf),
+        ])
+
+        assert result.exit_code == 0
+        # Default output should be input_scanned.pdf
+        expected_output = sample_pdf.with_stem(f"{sample_pdf.stem}_scanned")
+        assert expected_output.exists()
+        # Cleanup
+        expected_output.unlink()
+
+    def test_scan_copy_with_dpi(self, runner, sample_pdf, temp_dir):
+        """Test scan-copy with DPI option."""
+        output_path = temp_dir / "scanned.pdf"
+
+        result = runner.invoke(main, [
+            "scan-copy",
+            str(sample_pdf),
+            "-o", str(output_path),
+            "--dpi", "150",
+        ])
+
+        assert result.exit_code == 0
+        assert output_path.exists()
+
+    def test_scan_copy_with_color_mode(self, runner, sample_pdf, temp_dir):
+        """Test scan-copy with color mode options."""
+        output_grayscale = temp_dir / "grayscale.pdf"
+        output_bw = temp_dir / "bw.pdf"
+
+        # Test grayscale
+        result = runner.invoke(main, [
+            "scan-copy",
+            str(sample_pdf),
+            "-o", str(output_grayscale),
+            "--color-mode", "grayscale",
+        ])
+        assert result.exit_code == 0
+        assert output_grayscale.exists()
+
+        # Test black & white
+        result = runner.invoke(main, [
+            "scan-copy",
+            str(sample_pdf),
+            "-o", str(output_bw),
+            "--color-mode", "bw",
+        ])
+        assert result.exit_code == 0
+        assert output_bw.exists()
+
+    def test_scan_copy_quiet_mode(self, runner, sample_pdf, temp_dir):
+        """Test scan-copy with quiet flag."""
+        output_path = temp_dir / "scanned.pdf"
+
+        result = runner.invoke(main, [
+            "scan-copy",
+            str(sample_pdf),
+            "-o", str(output_path),
+            "--quiet",
+        ])
+
+        assert result.exit_code == 0
+        assert output_path.exists()
+        # In quiet mode, should have minimal output
+        assert "LegacyLipi" not in result.output
+
+    def test_scan_copy_nonexistent_file(self, runner):
+        """Test scan-copy with nonexistent file."""
+        result = runner.invoke(main, [
+            "scan-copy",
+            "/nonexistent/file.pdf",
+        ])
+
+        assert result.exit_code != 0
+
+    def test_scan_copy_shows_file_sizes(self, runner, sample_pdf, temp_dir):
+        """Test that scan-copy shows file size comparison."""
+        output_path = temp_dir / "scanned.pdf"
+
+        result = runner.invoke(main, [
+            "scan-copy",
+            str(sample_pdf),
+            "-o", str(output_path),
+        ])
+
+        assert result.exit_code == 0
+        assert "Original:" in result.output
+        assert "Output:" in result.output
+        assert "KB" in result.output
+
+
 class TestErrorHandling:
     """Tests for error handling in CLI."""
 
