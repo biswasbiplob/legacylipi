@@ -1418,6 +1418,7 @@ Generated: {metadata.generated_at}"""
         output_path: Path | None = None,
         dpi: int = 300,
         color_mode: str = "color",
+        quality: int = 85,
     ) -> bytes:
         """Render each page as image and create image-based PDF.
 
@@ -1429,6 +1430,7 @@ Generated: {metadata.generated_at}"""
             output_path: Optional path to save PDF directly.
             dpi: Resolution for rendering (150, 300, 600). Default: 300.
             color_mode: Color mode - "color", "grayscale", or "bw". Default: color.
+            quality: JPEG quality (1-100). Lower = smaller file. Default: 85.
 
         Returns:
             PDF content as bytes.
@@ -1457,11 +1459,19 @@ Generated: {metadata.generated_at}"""
             # Create new page with same dimensions
             new_page = output_doc.new_page(width=page.rect.width, height=page.rect.height)
 
-            # Insert image
-            new_page.insert_image(new_page.rect, pixmap=pix)
+            # Convert to JPEG for compression (dramatically reduces file size)
+            # Use PNG for B&W mode to preserve sharp edges
+            if color_mode == "bw":
+                # PNG for B&W preserves sharp edges better
+                img_bytes = pix.tobytes("png")
+                new_page.insert_image(new_page.rect, stream=img_bytes)
+            else:
+                # JPEG compression for color/grayscale
+                jpeg_bytes = pix.tobytes("jpeg", jpg_quality=quality)
+                new_page.insert_image(new_page.rect, stream=jpeg_bytes)
 
-        # Get bytes
-        pdf_bytes = output_doc.tobytes()
+        # Get bytes with deflate compression
+        pdf_bytes = output_doc.tobytes(deflate=True)
 
         if output_path:
             Path(output_path).write_bytes(pdf_bytes)
