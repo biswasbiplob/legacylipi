@@ -11,6 +11,18 @@ LegacyLipi is a PDF translator for legacy Indian font encodings (Marathi, Hindi,
 - Create PR after implementation is complete
 - Never commit directly to `main` for new features
 
+### Version Bumping
+**Always bump the version when adding new features or making significant changes.**
+
+Version is defined in these locations (keep them in sync):
+- `pyproject.toml` - line 7 (`version = "x.y.z"`)
+- `src/legacylipi/__init__.py` - line 6 (`__version__ = "x.y.z"`)
+
+Follow semantic versioning:
+- **MAJOR** (x.0.0): Breaking changes
+- **MINOR** (0.x.0): New features (backward compatible)
+- **PATCH** (0.0.x): Bug fixes
+
 ## Project Structure
 ```
 legacylipi/

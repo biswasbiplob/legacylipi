@@ -7,6 +7,7 @@ import fitz
 import pytest
 from click.testing import CliRunner
 
+from legacylipi import __version__
 from legacylipi.cli import main
 
 
@@ -63,7 +64,7 @@ class TestMainCommand:
         result = runner.invoke(main, ["--version"])
 
         assert result.exit_code == 0
-        assert "0.1.0" in result.output
+        assert __version__ in result.output
 
 
 class TestDetectCommand:
@@ -166,7 +167,7 @@ class TestTranslateCommand:
 
         assert result.exit_code == 0
         # Quiet mode should have minimal output
-        assert "LegacyLipi v0.1.0" not in result.output
+        assert f"LegacyLipi v{__version__}" not in result.output
 
     def test_translate_markdown_format(self, runner, sample_pdf, temp_dir):
         """Test translation with Markdown output."""
@@ -386,7 +387,7 @@ class TestExtractCommand:
         assert result.exit_code == 0
         assert output_path.exists()
         # Quiet mode should have minimal output
-        assert "LegacyLipi v0.1.0" not in result.output
+        assert f"LegacyLipi v{__version__}" not in result.output
 
     def test_extract_default_output(self, runner, sample_pdf):
         """Test extraction with default output path."""

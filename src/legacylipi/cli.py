@@ -58,7 +58,7 @@ def print_warning(message: str):
 
 
 @click.group()
-@click.version_option(version="0.1.0", prog_name="LegacyLipi")
+@click.version_option(version=__version__, prog_name="LegacyLipi")
 def main():
     """LegacyLipi - Legacy Font PDF Translator.
 

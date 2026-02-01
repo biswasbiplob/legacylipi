@@ -3,7 +3,7 @@
 Translate PDF documents with legacy Indian font encodings to English or other languages.
 """
 
-__version__ = "0.2.1"
+__version__ = "0.4.0"
 __author__ = "Biplob Biswas"
 
 from legacylipi.core.models import (
