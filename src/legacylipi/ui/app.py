@@ -100,6 +100,7 @@ class TranslationUI:
         # Scanned copy settings
         self.scan_dpi = 300
         self.scan_color_mode = "color"
+        self.scan_quality = 85  # JPEG quality (1-100)
 
         # UI elements
         self.progress_bar = None
@@ -285,9 +286,21 @@ class TranslationUI:
                                 on_change=lambda e: setattr(self, "scan_color_mode", e.value),
                             ).classes("w-28")
 
-                        ui.label("Create an image-based PDF copy (no text extraction)").classes(
-                            "text-xs text-gray-500 mt-2"
-                        )
+                        with ui.row().classes("items-center gap-2 mt-2"):
+                            ui.label("Quality:").classes("text-sm")
+                            ui.slider(
+                                min=1,
+                                max=100,
+                                value=self.scan_quality,
+                                on_change=lambda e: setattr(self, "scan_quality", int(e.value)),
+                            ).classes("w-40")
+                            ui.label().bind_text_from(
+                                self, "scan_quality", lambda v: f"{v}%"
+                            ).classes("text-sm w-12")
+
+                        ui.label(
+                            "Create an image-based PDF copy. Lower quality = smaller file."
+                        ).classes("text-xs text-gray-500 mt-2")
 
                     # Translate button
                     self.translate_button = (
@@ -462,6 +475,7 @@ class TranslationUI:
                     input_path=tmp_input_path,
                     dpi=self.scan_dpi,
                     color_mode=self.scan_color_mode,
+                    quality=self.scan_quality,
                 ),
             )
 
