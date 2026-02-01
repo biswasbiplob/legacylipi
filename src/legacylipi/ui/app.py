@@ -52,6 +52,12 @@ OUTPUT_FORMATS = {
     "markdown": "Markdown",
 }
 
+# Output formats for convert mode (no PDF)
+OUTPUT_FORMATS_CONVERT = {
+    "text": "Text",
+    "markdown": "Markdown",
+}
+
 TRANSLATORS = {
     "trans": "Translate-Shell (CLI) - Recommended",
     "gcp_cloud": "Google Cloud Translation (500K free/month)",
@@ -64,6 +70,18 @@ TRANSLATORS = {
 TRANSLATION_MODES = {
     "structure_preserving": "Structure Preserving (Maintains Layout)",
     "flowing": "Flowing Text (Standard)",
+}
+
+WORKFLOW_MODES = {
+    "scan_copy": "Scanned Copy",
+    "convert": "Convert to Unicode",
+    "translate": "Full Translation",
+}
+
+WORKFLOW_DESCRIPTIONS = {
+    "scan_copy": "Create an image-based PDF copy of your document",
+    "convert": "Extract text via OCR and convert to readable Unicode",
+    "translate": "Full pipeline: OCR, Unicode conversion, and translation",
 }
 
 OPENAI_MODELS = ["gpt-5.2", "gpt-5.1", "gpt-5", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo"]
@@ -80,11 +98,14 @@ class TranslationUI:
         self.result_filename: str | None = None
         self.is_translating: bool = False
 
+        # Workflow mode state
+        self.workflow_mode = "translate"  # "scan_copy" | "convert" | "translate"
+
         # UI state
         self.target_lang = "en"
         self.output_format = "pdf"
         self.use_ocr = False
-        self.ocr_only_mode = False  # Skip translation, output OCR text only
+        self.ocr_only_mode = False  # Internal flag for _translate() logic
         self.ocr_engine = "easyocr"  # Default to free EasyOCR
         self.ocr_lang = "mar"
         self.ocr_dpi = 300
@@ -102,7 +123,7 @@ class TranslationUI:
         self.scan_color_mode = "color"
         self.scan_quality = 85  # JPEG quality (1-100)
 
-        # UI elements
+        # UI elements - existing
         self.progress_bar = None
         self.progress_label = None
         self.status_label = None
@@ -113,6 +134,18 @@ class TranslationUI:
         self.idle_container = None
         self.progress_container = None
         self.complete_container = None
+
+        # UI elements - new for workflow mode
+        self.workflow_mode_card = None
+        self.scan_copy_section = None
+        self.ocr_section = None
+        self.output_format_section = None
+        self.translation_settings_section = None
+        self.translator_section = None
+        self.action_button = None
+        self.mode_description = None
+        self.idle_instructions = None
+        self.output_format_select = None
 
         # Queue-based progress updates to prevent WebSocket disconnection
         self._progress_queue: Queue = Queue()
@@ -166,6 +199,114 @@ class TranslationUI:
             else:
                 raise
 
+    def _change_workflow_mode(self, e):
+        """Handle workflow mode change."""
+        self.workflow_mode = e.value
+        self._rebuild_workflow_sections()
+        self._update_action_button()
+        self._update_mode_description()
+        self._update_idle_instructions()
+
+    def _rebuild_workflow_sections(self):
+        """Show/hide sections based on workflow mode."""
+        is_scan_copy = self.workflow_mode == "scan_copy"
+        is_convert = self.workflow_mode == "convert"
+        is_translate = self.workflow_mode == "translate"
+
+        # Update section visibility
+        if self.scan_copy_section:
+            self.scan_copy_section.set_visibility(is_scan_copy)
+        if self.ocr_section:
+            self.ocr_section.set_visibility(is_convert or is_translate)
+        if self.output_format_section:
+            self.output_format_section.set_visibility(is_convert or is_translate)
+        if self.translation_settings_section:
+            self.translation_settings_section.set_visibility(is_translate)
+        if self.translator_section:
+            self.translator_section.set_visibility(is_translate)
+
+        # Rebuild output format options based on mode
+        self._rebuild_output_format_options()
+
+        # For convert mode, force OCR on and rebuild options
+        if is_convert:
+            self.use_ocr = True
+            self._build_ocr_options()
+
+    def _rebuild_output_format_options(self):
+        """Rebuild output format dropdown based on workflow mode."""
+        if not self.output_format_select:
+            return
+
+        is_convert = self.workflow_mode == "convert"
+
+        if is_convert:
+            # Convert mode: only text and markdown
+            self.output_format_select.options = OUTPUT_FORMATS_CONVERT
+            # If current format is PDF, switch to text
+            if self.output_format == "pdf":
+                self.output_format = "text"
+                self.output_format_select.value = "text"
+        else:
+            # Translate mode: all formats including PDF
+            self.output_format_select.options = OUTPUT_FORMATS
+        self.output_format_select.update()
+
+    def _update_action_button(self):
+        """Update action button label and icon based on workflow mode."""
+        if not self.action_button:
+            return
+
+        labels = {
+            "scan_copy": ("Create Scanned Copy", "content_copy"),
+            "convert": ("Convert", "text_format"),
+            "translate": ("Translate", "translate"),
+        }
+        text, icon = labels[self.workflow_mode]
+        self.action_button.text = text
+        self.action_button._props["icon"] = icon
+        self.action_button.update()
+
+    def _update_mode_description(self):
+        """Update mode description text."""
+        if not self.mode_description:
+            return
+        self.mode_description.set_text(WORKFLOW_DESCRIPTIONS[self.workflow_mode])
+
+    def _update_idle_instructions(self):
+        """Update idle state instructions based on workflow mode."""
+        if not self.idle_instructions:
+            return
+
+        self.idle_instructions.clear()
+        with self.idle_instructions:
+            if self.workflow_mode == "scan_copy":
+                ui.label("1. Upload a PDF file").classes("text-sm text-gray-500")
+                ui.label("2. Adjust DPI, color, and quality settings").classes(
+                    "text-sm text-gray-500"
+                )
+                ui.label("3. Click Create Scanned Copy").classes("text-sm text-gray-500")
+            elif self.workflow_mode == "convert":
+                ui.label("1. Upload a PDF file").classes("text-sm text-gray-500")
+                ui.label("2. Configure OCR settings").classes("text-sm text-gray-500")
+                ui.label("3. Click Convert").classes("text-sm text-gray-500")
+            else:  # translate
+                ui.label("1. Upload a PDF file").classes("text-sm text-gray-500")
+                ui.label("2. Configure translation settings").classes("text-sm text-gray-500")
+                ui.label("3. Click Translate").classes("text-sm text-gray-500")
+
+    async def _handle_action(self):
+        """Unified action handler based on workflow mode."""
+        if self.workflow_mode == "scan_copy":
+            await self._create_scanned_copy()
+        elif self.workflow_mode == "convert":
+            self.use_ocr = True
+            self.ocr_only_mode = True
+            await self._translate()
+        else:  # translate
+            self.ocr_only_mode = False
+            await self._translate()
+
     def build(self):
         """Build the main UI."""
         ui.dark_mode().enable()
@@ -183,7 +324,7 @@ class TranslationUI:
             with ui.row().classes("w-full gap-6 items-start").style("flex-wrap: wrap;"):
                 # Left column - Settings
                 with ui.column().classes("gap-4").style("flex: 1 1 400px; min-width: 300px;"):
-                    # File upload section
+                    # 1. File upload section (unchanged)
                     with ui.card().classes("w-full"):
                         ui.label("Upload PDF").classes("text-lg font-semibold mb-2")
                         ui.upload(
@@ -197,73 +338,26 @@ class TranslationUI:
                             "text-gray-400 text-sm mt-2"
                         )
 
-                    # Translation settings
-                    with ui.card().classes("w-full"):
-                        ui.label("Translation Settings").classes("text-lg font-semibold mb-2")
+                    # 2. Workflow Mode Card (NEW)
+                    self.workflow_mode_card = ui.card().classes("w-full")
+                    with self.workflow_mode_card:
+                        ui.label("Workflow Mode").classes("text-lg font-semibold mb-2")
+                        ui.radio(
+                            options=WORKFLOW_MODES,
+                            value=self.workflow_mode,
+                            on_change=self._change_workflow_mode,
+                        ).props("inline")
+                        self.mode_description = ui.label(
+                            WORKFLOW_DESCRIPTIONS[self.workflow_mode]
+                        ).classes("text-xs text-gray-500 mt-2")
 
-                        with ui.row().classes("w-full gap-4"):
-                            ui.select(
-                                label="Target Language",
-                                options=TARGET_LANGUAGES,
-                                value=self.target_lang,
-                                on_change=lambda e: setattr(self, "target_lang", e.value),
-                            ).classes("flex-1")
-
-                            ui.select(
-                                label="Output Format",
-                                options=OUTPUT_FORMATS,
-                                value=self.output_format,
-                                on_change=lambda e: setattr(self, "output_format", e.value),
-                            ).classes("flex-1")
-
-                        ui.select(
-                            label="Translation Mode",
-                            options=TRANSLATION_MODES,
-                            value=self.translation_mode,
-                            on_change=lambda e: setattr(self, "translation_mode", e.value),
-                        ).classes("w-full mt-2")
-                        ui.label(
-                            "Structure Preserving keeps original layout and scales fonts to fit"
-                        ).classes("text-xs text-gray-500")
-
-                    # OCR settings
-                    with ui.card().classes("w-full"):
-                        ui.label("OCR Settings").classes("text-lg font-semibold mb-2")
-
-                        ui.checkbox(
-                            "Use OCR (for scanned/image PDFs)",
-                            value=self.use_ocr,
-                            on_change=self._toggle_ocr,
-                        )
-
-                        self.ocr_options_container = ui.column().classes("w-full gap-2 mt-2")
-                        self._build_ocr_options()
-
-                    # Translator settings
-                    with ui.card().classes("w-full"):
-                        ui.label("Translator").classes("text-lg font-semibold mb-2")
-
-                        ui.select(
-                            label="Translation Backend",
-                            options=TRANSLATORS,
-                            value=self.translator,
-                            on_change=self._change_translator,
-                        ).classes("w-full")
-
-                        self.translator_options_container = ui.column().classes("w-full gap-2 mt-2")
-                        self._build_translator_options()
-
-                    # Quick Actions card
-                    with ui.card().classes("w-full"):
-                        ui.label("Quick Actions").classes("text-lg font-semibold mb-2")
+                    # 3. Scanned Copy Section (visible only in scan_copy mode)
+                    self.scan_copy_section = ui.card().classes("w-full")
+                    self.scan_copy_section.set_visibility(False)
+                    with self.scan_copy_section:
+                        ui.label("Scan Settings").classes("text-lg font-semibold mb-2")
 
                         with ui.row().classes("items-center gap-4 flex-wrap"):
-                            ui.button(
-                                "Create Scanned Copy",
-                                icon="photo_camera",
-                                on_click=self._create_scanned_copy,
-                            ).props("color=secondary")
-
                             ui.select(
                                 label="DPI",
                                 options={
@@ -276,7 +370,7 @@ class TranslationUI:
                             ).classes("w-32")
 
                             ui.select(
-                                label="Color",
+                                label="Color Mode",
                                 options={
                                     "color": "Color",
                                     "grayscale": "Grayscale",
@@ -299,14 +393,79 @@ class TranslationUI:
                             ).classes("text-sm w-12")
 
                         ui.label(
-                            "Create an image-based PDF copy. Lower quality = smaller file."
+                            "Creates an image-based PDF. Lower quality = smaller file size."
                         ).classes("text-xs text-gray-500 mt-2")
 
-                    # Translate button
-                    self.translate_button = (
+                    # 4. OCR Settings Card (visible in convert and translate modes)
+                    self.ocr_section = ui.card().classes("w-full")
+                    with self.ocr_section:
+                        ui.label("OCR Settings").classes("text-lg font-semibold mb-2")
+
+                        # OCR checkbox only shown in translate mode
+                        self.ocr_checkbox_container = ui.column().classes("w-full")
+                        with self.ocr_checkbox_container:
+                            ui.checkbox(
+                                "Use OCR (for scanned/image PDFs)",
+                                value=self.use_ocr,
+                                on_change=self._toggle_ocr,
+                            )
+
+                        self.ocr_options_container = ui.column().classes("w-full gap-2 mt-2")
+                        self._build_ocr_options()
+
+                    # 5. Output Format Section (visible in convert and translate modes)
+                    self.output_format_section = ui.card().classes("w-full")
+                    with self.output_format_section:
+                        ui.label("Output Format").classes("text-lg font-semibold mb-2")
+                        self.output_format_select = ui.select(
+                            label="Format",
+                            options=OUTPUT_FORMATS,
+                            value=self.output_format,
+                            on_change=lambda e: setattr(self, "output_format", e.value),
+                        ).classes("w-full")
+
+                    # 6. Translation Settings Card (visible only in translate mode)
+                    self.translation_settings_section = ui.card().classes("w-full")
+                    with self.translation_settings_section:
+                        ui.label("Translation Settings").classes("text-lg font-semibold mb-2")
+
+                        ui.select(
+                            label="Target Language",
+                            options=TARGET_LANGUAGES,
+                            value=self.target_lang,
+                            on_change=lambda e: setattr(self, "target_lang", e.value),
+                        ).classes("w-full")
+
+                        ui.select(
+                            label="Translation Mode",
+                            options=TRANSLATION_MODES,
+                            value=self.translation_mode,
+                            on_change=lambda e: setattr(self, "translation_mode", e.value),
+                        ).classes("w-full mt-2")
+                        ui.label(
+                            "Structure Preserving keeps original layout and scales fonts to fit"
+                        ).classes("text-xs text-gray-500")
+
+                    # 7. Translator Card (visible only in translate mode)
+                    self.translator_section = ui.card().classes("w-full")
+                    with self.translator_section:
+                        ui.label("Translator").classes("text-lg font-semibold mb-2")
+
+                        ui.select(
+                            label="Translation Backend",
+                            options=TRANSLATORS,
+                            value=self.translator,
+                            on_change=self._change_translator,
+                        ).classes("w-full")
+
+                        self.translator_options_container = ui.column().classes("w-full gap-2 mt-2")
+                        self._build_translator_options()
+
+                    # 8. Action Button (dynamic label/icon)
+                    self.action_button = (
                         ui.button(
                             "Translate",
-                            on_click=self._translate,
+                            on_click=self._handle_action,
                             icon="translate",
                         )
                         .props("color=primary size=lg")
@@ -322,8 +481,9 @@ class TranslationUI:
                         self.idle_container = ui.column().classes("w-full items-center gap-2")
                         with self.idle_container:
                             ui.icon("info", size="xl", color="grey")
-                            ui.label("Ready to translate").classes("text-xl text-gray-400 mt-2")
-                            with ui.column().classes("mt-4 gap-1"):
+                            ui.label("Ready to process").classes("text-xl text-gray-400 mt-2")
+                            self.idle_instructions = ui.column().classes("mt-4 gap-1")
+                            with self.idle_instructions:
                                 ui.label("1. Upload a PDF file").classes("text-sm text-gray-500")
                                 ui.label("2. Configure translation settings").classes(
                                     "text-sm text-gray-500"
@@ -351,7 +511,7 @@ class TranslationUI:
                         self.complete_container.set_visibility(False)
                         with self.complete_container:
                             ui.icon("check_circle", size="xl", color="green")
-                            ui.label("Translation Complete!").classes("text-xl text-green-500")
+                            ui.label("Complete!").classes("text-xl text-green-500")
                             self.download_button = (
                                 ui.button(
                                     "Download Result",
@@ -362,11 +522,26 @@ class TranslationUI:
                                 .classes("w-full max-w-xs")
                             )
 
+            # Apply initial workflow mode visibility
+            self._rebuild_workflow_sections()
+
     def _build_ocr_options(self):
         """Build OCR-specific options."""
         self.ocr_options_container.clear()
 
-        if not self.use_ocr:
+        # In convert mode, OCR is mandatory - hide checkbox and always show options
+        is_convert = self.workflow_mode == "convert"
+
+        if is_convert:
+            # Hide the OCR checkbox in convert mode
+            self.ocr_checkbox_container.set_visibility(False)
+            self.use_ocr = True  # Force OCR on
+        else:
+            # Show checkbox in translate mode
+            self.ocr_checkbox_container.set_visibility(True)
+
+        # Show OCR options if OCR is enabled or in convert mode
+        if not self.use_ocr and not is_convert:
             with self.ocr_options_container:
                 ui.label("OCR is disabled. Enable to configure.").classes("text-gray-500 text-sm")
             return
@@ -401,41 +576,11 @@ class TranslationUI:
                     else None,
                 ).classes("flex-1")
 
-            # OCR-only mode option
-            ui.checkbox(
-                "OCR Only (No Translation)",
-                value=self.ocr_only_mode,
-                on_change=self._toggle_ocr_only,
-            ).classes("mt-2")
-            ui.label("Extract text via OCR and output readable Unicode - no translation").classes(
-                "text-xs text-gray-500"
-            )
-
     def _toggle_ocr(self, e):
         """Toggle OCR mode."""
         self.use_ocr = e.value
-        # Reset OCR-only mode when OCR is disabled
-        if not self.use_ocr:
-            self.ocr_only_mode = False
-            self._update_button_label()
         self._build_ocr_options()
         self.ocr_options_container.update()
-
-    def _toggle_ocr_only(self, e):
-        """Toggle OCR-only mode (no translation)."""
-        self.ocr_only_mode = e.value
-        self._update_button_label()
-
-    def _update_button_label(self):
-        """Update translate button label based on mode."""
-        if self.translate_button:
-            if self.ocr_only_mode:
-                self.translate_button.text = "Convert"
-                self.translate_button._props["icon"] = "text_format"
-            else:
-                self.translate_button.text = "Translate"
-                self.translate_button._props["icon"] = "translate"
-            self.translate_button.update()
 
     async def _create_scanned_copy(self):
         """Create a scanned copy of the uploaded PDF."""
@@ -445,7 +590,7 @@ class TranslationUI:
 
         # Show progress state
         self.is_translating = True
-        self.translate_button.disable()
+        self.action_button.disable()
         self.idle_container.set_visibility(False)
         self.complete_container.set_visibility(False)
 
@@ -497,7 +642,7 @@ class TranslationUI:
             ui.notify(f"Error: {e}", type="negative")
         finally:
             self.is_translating = False
-            self._safe_ui_update(lambda: self.translate_button.enable())
+            self._safe_ui_update(lambda: self.action_button.enable())
             if tmp_input_path and tmp_input_path.exists():
                 tmp_input_path.unlink()
 
@@ -589,11 +734,11 @@ class TranslationUI:
             ui.notify("Please upload a PDF file first.", type="warning")
             return
 
-        if self.translator == "openai" and not self.openai_key:
+        if self.translator == "openai" and not self.openai_key and not self.ocr_only_mode:
             ui.notify("Please enter your OpenAI API key.", type="warning")
             return
 
-        if self.translator == "gcp_cloud" and not self.gcp_project:
+        if self.translator == "gcp_cloud" and not self.gcp_project and not self.ocr_only_mode:
             # Try to get from environment
             import os
 
@@ -602,7 +747,7 @@ class TranslationUI:
                 return
 
         self.is_translating = True
-        self.translate_button.disable()
+        self.action_button.disable()
         self.idle_container.set_visibility(False)
         self.complete_container.set_visibility(False)
 
@@ -973,7 +1118,7 @@ class TranslationUI:
                 except Empty:
                     break
             logger.debug("Translation task finished, re-enabling UI")
-            self._safe_ui_update(lambda: self.translate_button.enable())
+            self._safe_ui_update(lambda: self.action_button.enable())
 
     def _download_result(self):
         """Trigger download of the result file."""
