@@ -978,7 +978,9 @@ class GCPDocumentTranslationBackend(TranslationBackendBase):
         """Get or create Translation client."""
         if self._client is None:
             try:
-                from google.cloud import translate_v3beta1 as translate
+                from google.cloud import (
+                    translate_v3beta1 as translate,  # type: ignore[attr-defined]
+                )
 
                 self._client = translate.TranslationServiceClient()
             except ImportError:
@@ -1054,7 +1056,7 @@ class GCPDocumentTranslationBackend(TranslationBackendBase):
             TranslationError: If translation fails.
         """
         try:
-            from google.cloud import translate_v3beta1 as translate
+            from google.cloud import translate_v3beta1 as translate  # type: ignore[attr-defined]
 
             client = self._get_client()
             parent = f"projects/{self._project_id}/locations/{self._location}"
