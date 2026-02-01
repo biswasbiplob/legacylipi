@@ -1412,6 +1412,75 @@ Generated: {metadata.generated_at}"""
         else:
             output_path.write_text(content, encoding="utf-8")
 
+    def generate_scanned_copy(
+        self,
+        input_path: Path,
+        output_path: Path | None = None,
+        dpi: int = 300,
+        color_mode: str = "color",
+        quality: int = 85,
+    ) -> bytes:
+        """Render each page as image and create image-based PDF.
+
+        Creates a "scanned" copy of a PDF by rendering each page as an image
+        and creating a new image-based PDF. No text extraction or OCR is performed.
+
+        Args:
+            input_path: Path to the source PDF.
+            output_path: Optional path to save PDF directly.
+            dpi: Resolution for rendering (150, 300, 600). Default: 300.
+            color_mode: Color mode - "color", "grayscale", or "bw". Default: color.
+            quality: JPEG quality (1-100). Lower = smaller file. Default: 85.
+
+        Returns:
+            PDF content as bytes.
+        """
+        doc = fitz.open(input_path)
+        output_doc = fitz.open()
+
+        for page in doc:
+            # Render page to pixmap (image)
+            mat = fitz.Matrix(dpi / 72, dpi / 72)
+
+            # Color space based on mode
+            if color_mode == "grayscale":
+                pix = page.get_pixmap(matrix=mat, colorspace=fitz.csGRAY)
+            elif color_mode == "bw":
+                # Render as grayscale first, then threshold to black/white
+                pix = page.get_pixmap(matrix=mat, colorspace=fitz.csGRAY)
+                # Apply threshold: pixels > 180 become white (255), others black (0)
+                samples = bytearray(pix.samples)
+                for i in range(len(samples)):
+                    samples[i] = 255 if samples[i] > 180 else 0
+                pix = fitz.Pixmap(pix.colorspace, pix.width, pix.height, bytes(samples), pix.alpha)
+            else:
+                pix = page.get_pixmap(matrix=mat)
+
+            # Create new page with same dimensions
+            new_page = output_doc.new_page(width=page.rect.width, height=page.rect.height)
+
+            # Convert to JPEG for compression (dramatically reduces file size)
+            # Use PNG for B&W mode to preserve sharp edges
+            if color_mode == "bw":
+                # PNG for B&W preserves sharp edges better
+                img_bytes = pix.tobytes("png")
+                new_page.insert_image(new_page.rect, stream=img_bytes)
+            else:
+                # JPEG compression for color/grayscale
+                jpeg_bytes = pix.tobytes("jpeg", jpg_quality=quality)
+                new_page.insert_image(new_page.rect, stream=jpeg_bytes)
+
+        # Get bytes with deflate compression
+        pdf_bytes = output_doc.tobytes(deflate=True)
+
+        if output_path:
+            Path(output_path).write_bytes(pdf_bytes)
+
+        doc.close()
+        output_doc.close()
+
+        return pdf_bytes
+
 
 def generate_output(
     document: PDFDocument,

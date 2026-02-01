@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import fitz
 import pytest
 
 from legacylipi.core.models import (
@@ -763,3 +764,167 @@ class TestPDFStructurePreservation:
             assert abs(pdf[0].rect.height - 842) < 1
         finally:
             pdf.close()
+
+
+class TestScannedCopy:
+    """Tests for scanned copy generation."""
+
+    @pytest.fixture
+    def sample_pdf_file(self, temp_dir):
+        """Create a sample PDF file for testing scanned copy."""
+        pdf_path = temp_dir / "sample.pdf"
+        doc = fitz.open()
+        page = doc.new_page(width=612, height=792)  # Letter size
+        page.insert_text((72, 72), "Test content for scanned copy", fontsize=12)
+        page.insert_text((72, 100), "Second line of text", fontsize=12)
+        doc.save(pdf_path)
+        doc.close()
+        return pdf_path
+
+    def test_generate_scanned_copy_basic(self, sample_pdf_file):
+        """Test basic scanned copy generation."""
+        generator = OutputGenerator()
+        output = generator.generate_scanned_copy(input_path=sample_pdf_file)
+
+        # Should return PDF bytes
+        assert isinstance(output, bytes)
+        assert output.startswith(b"%PDF")
+        assert b"%%EOF" in output
+
+    def test_generate_scanned_copy_with_output_path(self, sample_pdf_file, temp_dir):
+        """Test scanned copy saved to file."""
+        generator = OutputGenerator()
+        output_path = temp_dir / "scanned.pdf"
+
+        output = generator.generate_scanned_copy(
+            input_path=sample_pdf_file,
+            output_path=output_path,
+        )
+
+        assert output_path.exists()
+        assert output_path.read_bytes() == output
+
+    def test_generate_scanned_copy_preserves_page_count(self, temp_dir):
+        """Test that scanned copy preserves page count."""
+        # Create multi-page PDF
+        pdf_path = temp_dir / "multipage.pdf"
+        doc = fitz.open()
+        for i in range(3):
+            page = doc.new_page()
+            page.insert_text((72, 72), f"Page {i + 1}", fontsize=12)
+        doc.save(pdf_path)
+        doc.close()
+
+        generator = OutputGenerator()
+        output = generator.generate_scanned_copy(input_path=pdf_path)
+
+        # Verify page count
+        result_pdf = fitz.open(stream=output, filetype="pdf")
+        try:
+            assert result_pdf.page_count == 3
+        finally:
+            result_pdf.close()
+
+    def test_generate_scanned_copy_preserves_dimensions(self, sample_pdf_file):
+        """Test that scanned copy preserves page dimensions."""
+        generator = OutputGenerator()
+        output = generator.generate_scanned_copy(input_path=sample_pdf_file)
+
+        # Verify dimensions match original (Letter size)
+        result_pdf = fitz.open(stream=output, filetype="pdf")
+        try:
+            assert abs(result_pdf[0].rect.width - 612) < 1
+            assert abs(result_pdf[0].rect.height - 792) < 1
+        finally:
+            result_pdf.close()
+
+    def test_generate_scanned_copy_dpi_options(self, sample_pdf_file):
+        """Test scanned copy with different DPI settings."""
+        generator = OutputGenerator()
+
+        # Lower DPI should produce smaller file
+        output_150 = generator.generate_scanned_copy(
+            input_path=sample_pdf_file,
+            dpi=150,
+        )
+
+        output_300 = generator.generate_scanned_copy(
+            input_path=sample_pdf_file,
+            dpi=300,
+        )
+
+        # Both should be valid PDFs
+        assert output_150.startswith(b"%PDF")
+        assert output_300.startswith(b"%PDF")
+
+        # Higher DPI should produce larger file
+        assert len(output_300) > len(output_150)
+
+    def test_generate_scanned_copy_grayscale(self, sample_pdf_file):
+        """Test scanned copy with grayscale color mode."""
+        generator = OutputGenerator()
+        output = generator.generate_scanned_copy(
+            input_path=sample_pdf_file,
+            color_mode="grayscale",
+        )
+
+        assert isinstance(output, bytes)
+        assert output.startswith(b"%PDF")
+
+    def test_generate_scanned_copy_bw(self, sample_pdf_file):
+        """Test scanned copy with black & white color mode."""
+        generator = OutputGenerator()
+        output = generator.generate_scanned_copy(
+            input_path=sample_pdf_file,
+            color_mode="bw",
+        )
+
+        assert isinstance(output, bytes)
+        assert output.startswith(b"%PDF")
+
+    def test_generate_scanned_copy_quality_reduces_size(self, sample_pdf_file):
+        """Test that lower quality produces smaller files."""
+        generator = OutputGenerator()
+
+        # High quality (larger file)
+        output_high = generator.generate_scanned_copy(
+            input_path=sample_pdf_file,
+            quality=95,
+        )
+
+        # Low quality (smaller file)
+        output_low = generator.generate_scanned_copy(
+            input_path=sample_pdf_file,
+            quality=50,
+        )
+
+        # Both should be valid PDFs
+        assert output_high.startswith(b"%PDF")
+        assert output_low.startswith(b"%PDF")
+
+        # Lower quality should produce smaller file
+        assert len(output_low) < len(output_high)
+
+    def test_generate_scanned_copy_quality_parameter(self, sample_pdf_file):
+        """Test that quality parameter is accepted and produces valid PDF."""
+        generator = OutputGenerator()
+
+        # Test various quality levels
+        for quality in [1, 50, 85, 100]:
+            output = generator.generate_scanned_copy(
+                input_path=sample_pdf_file,
+                quality=quality,
+            )
+            assert isinstance(output, bytes)
+            assert output.startswith(b"%PDF")
+            assert b"%%EOF" in output
+
+    def test_generate_scanned_copy_default_quality(self, sample_pdf_file):
+        """Test that default quality (85) produces valid PDF."""
+        generator = OutputGenerator()
+
+        # Call without quality parameter - should use default (85)
+        output = generator.generate_scanned_copy(input_path=sample_pdf_file)
+
+        assert isinstance(output, bytes)
+        assert output.startswith(b"%PDF")

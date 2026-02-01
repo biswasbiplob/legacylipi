@@ -860,6 +860,94 @@ def detect(input_file: Path, verbose: bool):
         sys.exit(1)
 
 
+@main.command("scan-copy")
+@click.argument("input_file", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(path_type=Path),
+    help="Output file path. Defaults to input file with '_scanned.pdf' suffix.",
+)
+@click.option(
+    "--dpi",
+    type=click.Choice(["150", "300", "600"]),
+    default="300",
+    help="DPI for rendering (higher = better quality but larger file). Default: 300",
+)
+@click.option(
+    "--color-mode",
+    type=click.Choice(["color", "grayscale", "bw"]),
+    default="color",
+    help="Color mode: color, grayscale, or bw (black & white). Default: color",
+)
+@click.option(
+    "--quality",
+    type=click.IntRange(1, 100),
+    default=85,
+    help="JPEG quality (1-100). Lower = smaller file. Default: 85",
+)
+@click.option(
+    "--quiet",
+    "-q",
+    is_flag=True,
+    help="Suppress progress output.",
+)
+def scan_copy(
+    input_file: Path,
+    output: Path | None,
+    dpi: str,
+    color_mode: str,
+    quality: int,
+    quiet: bool,
+):
+    """Create a scanned copy of a PDF (image-based, no text).
+
+    Renders each page as an image and creates a new image-based PDF.
+    Useful for preserving visual appearance or creating archival copies.
+    """
+    if not quiet:
+        print_banner()
+        console.print(f"\n[bold]Creating scanned copy of:[/bold] {input_file.name}")
+
+    # Determine output path
+    if output is None:
+        output = input_file.with_stem(f"{input_file.stem}_scanned")
+
+    try:
+        generator = OutputGenerator()
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+            disable=quiet,
+        ) as progress:
+            task = progress.add_task("Rendering pages...", total=None)
+
+            generator.generate_scanned_copy(
+                input_path=input_file,
+                output_path=output,
+                dpi=int(dpi),
+                color_mode=color_mode,
+                quality=quality,
+            )
+
+            progress.update(task, description="Complete!")
+
+        if not quiet:
+            print_success(f"Scanned copy saved to: {output}")
+
+            # Show file size comparison
+            original_size = input_file.stat().st_size / 1024
+            output_size = output.stat().st_size / 1024
+            console.print(f"  Original: {original_size:.1f} KB")
+            console.print(f"  Output:   {output_size:.1f} KB")
+
+    except Exception as e:
+        print_error(str(e))
+        sys.exit(1)
+
+
 @main.command("encodings")
 @click.option(
     "--search",

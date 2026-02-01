@@ -97,6 +97,11 @@ class TranslationUI:
         self.trans_path = ""
         self.gcp_project = ""
 
+        # Scanned copy settings
+        self.scan_dpi = 300
+        self.scan_color_mode = "color"
+        self.scan_quality = 85  # JPEG quality (1-100)
+
         # UI elements
         self.progress_bar = None
         self.progress_label = None
@@ -248,6 +253,55 @@ class TranslationUI:
                         self.translator_options_container = ui.column().classes("w-full gap-2 mt-2")
                         self._build_translator_options()
 
+                    # Quick Actions card
+                    with ui.card().classes("w-full"):
+                        ui.label("Quick Actions").classes("text-lg font-semibold mb-2")
+
+                        with ui.row().classes("items-center gap-4 flex-wrap"):
+                            ui.button(
+                                "Create Scanned Copy",
+                                icon="photo_camera",
+                                on_click=self._create_scanned_copy,
+                            ).props("color=secondary")
+
+                            ui.select(
+                                label="DPI",
+                                options={
+                                    "150": "150 (Fast)",
+                                    "300": "300 (Standard)",
+                                    "600": "600 (High Quality)",
+                                },
+                                value="300",
+                                on_change=lambda e: setattr(self, "scan_dpi", int(e.value)),
+                            ).classes("w-32")
+
+                            ui.select(
+                                label="Color",
+                                options={
+                                    "color": "Color",
+                                    "grayscale": "Grayscale",
+                                    "bw": "B&W",
+                                },
+                                value="color",
+                                on_change=lambda e: setattr(self, "scan_color_mode", e.value),
+                            ).classes("w-28")
+
+                        with ui.row().classes("items-center gap-2 mt-2"):
+                            ui.label("Quality:").classes("text-sm")
+                            ui.slider(
+                                min=1,
+                                max=100,
+                                value=self.scan_quality,
+                                on_change=lambda e: setattr(self, "scan_quality", int(e.value)),
+                            ).classes("w-40")
+                            ui.label().bind_text_from(
+                                self, "scan_quality", lambda v: f"{v}%"
+                            ).classes("text-sm w-12")
+
+                        ui.label(
+                            "Create an image-based PDF copy. Lower quality = smaller file."
+                        ).classes("text-xs text-gray-500 mt-2")
+
                     # Translate button
                     self.translate_button = (
                         ui.button(
@@ -382,6 +436,70 @@ class TranslationUI:
                 self.translate_button.text = "Translate"
                 self.translate_button._props["icon"] = "translate"
             self.translate_button.update()
+
+    async def _create_scanned_copy(self):
+        """Create a scanned copy of the uploaded PDF."""
+        if not self.uploaded_file:
+            ui.notify("Please upload a PDF file first", type="warning")
+            return
+
+        # Show progress state
+        self.is_translating = True
+        self.translate_button.disable()
+        self.idle_container.set_visibility(False)
+        self.complete_container.set_visibility(False)
+
+        self._safe_ui_update(lambda: self.progress_bar.set_value(0.1))
+        self._safe_ui_update(lambda: self.progress_label.set_text("10%"))
+        self._safe_ui_update(lambda: self.status_label.set_text("Creating scanned copy..."))
+
+        tmp_input_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_input:
+                tmp_input.write(self.uploaded_file)
+                tmp_input_path = Path(tmp_input.name)
+
+            from legacylipi.core.output_generator import OutputGenerator
+
+            generator = OutputGenerator()
+
+            self._safe_ui_update(lambda: self.progress_bar.set_value(0.3))
+            self._safe_ui_update(lambda: self.progress_label.set_text("30%"))
+            self._safe_ui_update(lambda: self.status_label.set_text("Rendering pages as images..."))
+            await asyncio.sleep(0.1)  # Allow UI to update
+
+            loop = asyncio.get_event_loop()
+            result_bytes = await loop.run_in_executor(
+                None,
+                lambda: generator.generate_scanned_copy(
+                    input_path=tmp_input_path,
+                    dpi=self.scan_dpi,
+                    color_mode=self.scan_color_mode,
+                    quality=self.scan_quality,
+                ),
+            )
+
+            # Set result for download
+            base_name = Path(self.uploaded_filename).stem if self.uploaded_filename else "document"
+            self.result_content = result_bytes
+            self.result_filename = f"{base_name}_scanned.pdf"
+
+            self._safe_ui_update(lambda: self.progress_bar.set_value(1.0))
+            self._safe_ui_update(lambda: self.progress_label.set_text("100%"))
+            self._safe_ui_update(lambda: self.status_label.set_text("Complete!"))
+            self._safe_ui_update(lambda: self.complete_container.set_visibility(True))
+            ui.notify("Scanned copy created successfully!", type="positive")
+
+        except Exception as e:
+            logger.exception("Error creating scanned copy")
+            self._safe_ui_update(lambda: self.idle_container.set_visibility(True))
+            self._safe_ui_update(lambda e=e: self.status_label.set_text(f"Error: {str(e)}"))
+            ui.notify(f"Error: {e}", type="negative")
+        finally:
+            self.is_translating = False
+            self._safe_ui_update(lambda: self.translate_button.enable())
+            if tmp_input_path and tmp_input_path.exists():
+                tmp_input_path.unlink()
 
     def _build_translator_options(self):
         """Build translator-specific options based on selected translator."""
