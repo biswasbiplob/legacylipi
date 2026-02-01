@@ -646,6 +646,27 @@ class TestScanCopyCommand:
         assert result.exit_code != 0
 
 
+class TestUICommand:
+    """Tests for the ui command."""
+
+    def test_ui_help(self, runner):
+        """Test ui command help."""
+        result = runner.invoke(main, ["ui", "--help"])
+
+        assert result.exit_code == 0
+        assert "Launch the LegacyLipi web interface" in result.output
+        assert "--port" in result.output
+        assert "--host" in result.output
+        assert "--no-browser" in result.output
+
+    def test_ui_in_main_help(self, runner):
+        """Test that ui command appears in main help."""
+        result = runner.invoke(main, ["--help"])
+
+        assert result.exit_code == 0
+        assert "ui" in result.output
+
+
 class TestErrorHandling:
     """Tests for error handling in CLI."""
 
