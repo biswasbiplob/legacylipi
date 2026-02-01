@@ -6,10 +6,32 @@ LegacyLipi is a PDF translator for legacy Indian font encodings (Marathi, Hindi,
 ## Development Guidelines
 
 ### Feature Branches
-**Always create new features in feature branches** so that we have a PR for everything new.
+**IMPORTANT: Before starting ANY new feature, ALWAYS create a new branch based on `main`!**
+
+```bash
+# ALWAYS start from main for new features
+git checkout main && git pull && git checkout -b feature/<feature-name>
+```
+
+- **New features MUST branch from `main`** - never from another feature branch
 - Branch naming: `feature/<feature-name>` (e.g., `feature/ocr-only-mode`)
 - Create PR after implementation is complete
 - Never commit directly to `main` for new features
+- **Always verify you're on the correct branch before making changes**
+
+### Test-Driven Development (TDD)
+**IMPORTANT: Always write tests FIRST, then implement the feature!**
+
+Follow TDD methodology:
+1. **Write failing tests first** - Define expected behavior before writing code
+2. **Implement minimal code** - Write just enough code to make tests pass
+3. **Refactor** - Clean up code while keeping tests green
+
+Rules:
+- **Every new feature MUST have tests** - No exceptions
+- **Bug fixes MUST include regression tests** - Prove the bug is fixed
+- **Never write tests to fit existing code** - Tests define the contract, code implements it
+- Run `./scripts/check.sh` before committing to ensure all tests pass
 
 ### Version Bumping
 **Always bump the version when adding new features or making significant changes.**
