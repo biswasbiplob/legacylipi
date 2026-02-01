@@ -138,8 +138,45 @@ Mapping files: `src/legacylipi/mappings/shree_dev.py`, `dvb_tt.py`, `loader.py`
 ### OutputGenerator
 - `generate(document, encoding_result, translation_result, format)` - Main entry point
 - `generate_pdf(..., structure_preserving_translation=True)` - Structure-preserving PDF
+- `generate_scanned_copy(input_path, output_path, dpi, color_mode, quality)` - Create image-based PDF
 - `_calculate_block_font_size(text, width, height, original_size)` - Font scaling
 - `_place_translated_blocks_with_positions(page, blocks, font_path)` - Block rendering
+
+## Scanned Copy Feature
+
+Creates an image-based PDF copy by rendering each page as an image. Useful for preserving visual appearance or creating archival copies.
+
+### Key Parameters
+- `dpi`: Resolution (150, 300, 600). Higher = better quality but larger file
+- `color_mode`: "color", "grayscale", or "bw" (black & white)
+- `quality`: JPEG compression quality (1-100). Lower = smaller file
+
+### File Size Optimization
+Uses JPEG compression for dramatic file size reduction:
+- **Without compression**: ~150MB for 6-page PDF
+- **With quality=85**: ~5MB (default)
+- **With quality=70**: ~4MB
+- **With quality=50**: ~3.3MB
+
+**Note:** B&W mode uses PNG (not JPEG) to preserve sharp edges.
+
+### CLI Usage
+```bash
+# Default quality (85)
+legacylipi scan-copy input.pdf -o output.pdf
+
+# Lower quality for smaller files
+legacylipi scan-copy input.pdf -o output.pdf --quality 70
+
+# With DPI and color options
+legacylipi scan-copy input.pdf -o output.pdf --dpi 150 --color-mode grayscale --quality 60
+```
+
+### UI Usage
+In the web UI, use the "Quick Actions" card:
+1. Upload a PDF
+2. Adjust DPI, Color mode, and Quality slider
+3. Click "Create Scanned Copy"
 
 ## UI (app.py)
 
