@@ -135,8 +135,14 @@ Open **http://localhost:8080** in your browser.
 
 ![LegacyLipi Web UI](docs/images/ui-ready.png)
 
+**Workflow Modes:**
+- **Scanned Copy** - Create image-based PDF copy (adjust DPI, color, quality)
+- **Convert to Unicode** - OCR + Unicode conversion without translation
+- **Full Translation** - Complete pipeline with OCR, conversion, and translation
+
 **Features:**
 - Drag-and-drop PDF upload
+- Workflow-based UI with mode selection
 - Multiple translation backends
 - OCR support with language selection
 - Structure-preserving or flowing text modes
