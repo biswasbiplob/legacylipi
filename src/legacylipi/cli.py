@@ -881,6 +881,12 @@ def detect(input_file: Path, verbose: bool):
     help="Color mode: color, grayscale, or bw (black & white). Default: color",
 )
 @click.option(
+    "--quality",
+    type=click.IntRange(1, 100),
+    default=85,
+    help="JPEG quality (1-100). Lower = smaller file. Default: 85",
+)
+@click.option(
     "--quiet",
     "-q",
     is_flag=True,
@@ -891,6 +897,7 @@ def scan_copy(
     output: Path | None,
     dpi: str,
     color_mode: str,
+    quality: int,
     quiet: bool,
 ):
     """Create a scanned copy of a PDF (image-based, no text).
@@ -922,6 +929,7 @@ def scan_copy(
                 output_path=output,
                 dpi=int(dpi),
                 color_mode=color_mode,
+                quality=quality,
             )
 
             progress.update(task, description="Complete!")
