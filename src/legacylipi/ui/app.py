@@ -430,8 +430,15 @@ class TranslationUI:
             ui.notify("Please upload a PDF file first", type="warning")
             return
 
-        self._show_progress_state()
-        self._update_status("Creating scanned copy...")
+        # Show progress state
+        self.is_translating = True
+        self.translate_button.disable()
+        self.idle_container.set_visibility(False)
+        self.complete_container.set_visibility(False)
+
+        self._safe_ui_update(lambda: self.progress_bar.set_value(0.1))
+        self._safe_ui_update(lambda: self.progress_label.set_text("10%"))
+        self._safe_ui_update(lambda: self.status_label.set_text("Creating scanned copy..."))
 
         tmp_input_path: Path | None = None
         try:
@@ -442,6 +449,11 @@ class TranslationUI:
             from legacylipi.core.output_generator import OutputGenerator
 
             generator = OutputGenerator()
+
+            self._safe_ui_update(lambda: self.progress_bar.set_value(0.3))
+            self._safe_ui_update(lambda: self.progress_label.set_text("30%"))
+            self._safe_ui_update(lambda: self.status_label.set_text("Rendering pages as images..."))
+            await asyncio.sleep(0.1)  # Allow UI to update
 
             loop = asyncio.get_event_loop()
             result_bytes = await loop.run_in_executor(
@@ -458,14 +470,20 @@ class TranslationUI:
             self.result_content = result_bytes
             self.result_filename = f"{base_name}_scanned.pdf"
 
-            self._show_complete_state()
+            self._safe_ui_update(lambda: self.progress_bar.set_value(1.0))
+            self._safe_ui_update(lambda: self.progress_label.set_text("100%"))
+            self._safe_ui_update(lambda: self.status_label.set_text("Complete!"))
+            self._safe_ui_update(lambda: self.complete_container.set_visibility(True))
             ui.notify("Scanned copy created successfully!", type="positive")
 
         except Exception as e:
             logger.exception("Error creating scanned copy")
-            self._show_idle_state()
+            self._safe_ui_update(lambda: self.idle_container.set_visibility(True))
+            self._safe_ui_update(lambda e=e: self.status_label.set_text(f"Error: {str(e)}"))
             ui.notify(f"Error: {e}", type="negative")
         finally:
+            self.is_translating = False
+            self._safe_ui_update(lambda: self.translate_button.enable())
             if tmp_input_path and tmp_input_path.exists():
                 tmp_input_path.unlink()
 
