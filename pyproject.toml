@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "legacylipi"
-version = "0.3.0"
+version = "0.4.0"
 description = "Legacy Font PDF Translator - Translate PDFs with legacy Indian font encodings to English"
 readme = "README.md"
 license = "MIT"

@@ -3,6 +3,27 @@
 ## Project Overview
 LegacyLipi is a PDF translator for legacy Indian font encodings (Marathi, Hindi, Tamil, etc.). It converts PDFs with legacy encodings to Unicode and translates them to various target languages.
 
+## Development Guidelines
+
+### Feature Branches
+**Always create new features in feature branches** so that we have a PR for everything new.
+- Branch naming: `feature/<feature-name>` (e.g., `feature/ocr-only-mode`)
+- Create PR after implementation is complete
+- Never commit directly to `main` for new features
+
+### Version Bumping
+**Always bump the version when adding new features or making significant changes.**
+
+Version is defined in **one place only**:
+- `pyproject.toml` - line 7 (`version = "x.y.z"`)
+
+The version is automatically read from package metadata via `importlib.metadata` in `__init__.py`.
+
+Follow semantic versioning:
+- **MAJOR** (x.0.0): Breaking changes
+- **MINOR** (0.x.0): New features (backward compatible)
+- **PATCH** (0.0.x): Bug fixes
+
 ## Project Structure
 ```
 legacylipi/
