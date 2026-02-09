@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-import pytest
-
 from legacylipi.core.encoding_detector import (
     LEGACY_FONT_PATTERNS,
     EncodingDetector,
@@ -178,7 +176,9 @@ class TestFontNameDetection:
         for font_name in unicode_fonts:
             result = detector.detect_from_font_name(font_name)
             assert result is not None, f"Should detect {font_name}"
-            assert result.detected_encoding == "unicode-devanagari", f"Should detect {font_name} as Unicode"
+            assert result.detected_encoding == "unicode-devanagari", (
+                f"Should detect {font_name} as Unicode"
+            )
             assert result.is_unicode is True
 
     def test_empty_font_name(self):

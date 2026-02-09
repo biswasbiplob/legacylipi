@@ -134,7 +134,7 @@ LEGACY_FONT_PATTERNS: list[LegacyFontPattern] = [
         patterns=[
             r"agra[-_\s]*\d*",
         ],
-        signatures=[],
+        signatures=["\xbcã", "ãä", "\xdaæ", "\xbdã", "\xbeä"],
         priority=5,
     ),
     LegacyFontPattern(
@@ -143,7 +143,7 @@ LEGACY_FONT_PATTERNS: list[LegacyFontPattern] = [
             r"akruti",
             r"aku[-_\s]*dev",
         ],
-        signatures=[],
+        signatures=["\xb0è", "\xb1é", "\xb2ê", "\xb3ë", "\xb4ì"],
         priority=5,
     ),
 ]
@@ -240,10 +240,74 @@ class EncodingDetector:
 
         return False
 
+    def detect_from_text_frequency(self, text: str) -> EncodingDetectionResult | None:
+        """Detect encoding using character frequency analysis.
+
+        Compares the set of characters in the text against known character
+        frequency profiles for each encoding. Profiles focus on extended ASCII
+        and special characters to avoid false positives with plain English text.
+
+        This is useful as a fallback when signature-based detection does not
+        yield a confident match.
+
+        Args:
+            text: The text to analyze.
+
+        Returns:
+            EncodingDetectionResult if a match is found, None otherwise.
+        """
+        if not text or len(text) < 20:
+            return None
+
+        # First check: text must contain extended ASCII or special chars
+        # to be considered a legacy encoding (avoid plain English false positives)
+        extended_count = sum(1 for c in text if ord(c) > 127)
+        if extended_count < 3:
+            return None
+
+        # Character frequency profiles for each encoding
+        # Use distinctive extended-ASCII / special characters to avoid
+        # false positives with plain English text
+        frequency_profiles: dict[str, set[str]] = {
+            "shree-dev": set(
+                "\xa7\xa8\xb2\xa1\xa2\xa5\xa6\xb0\xfe\xff\u0160\u0152\u0178\xbb\xbd\xbf"
+            ),
+            "kruti-dev": set("\xc5\xa5\xde\xa1"),
+            "dvb-tt": set("\xb4\xd6\xbf\xc3\xae\xd7\xac\xb8\xfc\xc6\u2020\u2021\u2030\u2039"),
+            "chanakya": set("\xd1\xc1\xc2\xc4\xc6\xc8\xca\xcc\xce\xd0\xd2\xd4\xd6\xd8\xda"),
+            "shusha": set("\xc9\xca\xc8\xcb\xcd\xcf\xd0\xd2\xd4\xd6\xae\xbd\xfe\xea\xeb"),
+        }
+
+        best_match = None
+        best_score = 0.0
+
+        text_chars = set(text)
+        for encoding, profile in frequency_profiles.items():
+            overlap = len(text_chars & profile)
+            if len(profile) > 0:
+                score = overlap / len(profile)
+                if score > best_score and score > 0.2:
+                    best_score = score
+                    best_match = encoding
+
+        if best_match:
+            confidence = min(0.85, 0.50 + (best_score * 0.35))
+            return EncodingDetectionResult(
+                detected_encoding=best_match,
+                confidence=confidence,
+                method=DetectionMethod.HEURISTIC,
+            )
+        return None
+
     def detect_from_text_heuristic(self, text: str) -> EncodingDetectionResult:
         """Detect encoding using heuristic text analysis.
 
         This is used when font metadata is unavailable or inconclusive.
+        It uses a multi-stage approach:
+        1. Check for Unicode Devanagari
+        2. Check for legacy font text signatures
+        3. Fall back to character frequency analysis
+        4. Fall back to extended ASCII ratio check
 
         Args:
             text: The text to analyze.
@@ -296,6 +360,11 @@ class EncodingDetector:
                 method=DetectionMethod.HEURISTIC,
                 fallback_encodings=fallbacks[:3],  # Top 3 fallbacks
             )
+
+        # Try character frequency analysis as fallback
+        freq_result = self.detect_from_text_frequency(text)
+        if freq_result is not None:
+            return freq_result
 
         # Check for general legacy encoding indicators
         # Legacy encodings often have high concentration of extended ASCII
