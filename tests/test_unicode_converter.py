@@ -2,18 +2,15 @@
 
 from pathlib import Path
 
-import pytest
-
 from legacylipi.core.models import (
-    EncodingDetectionResult,
     DetectionMethod,
+    EncodingDetectionResult,
     PDFDocument,
     PDFPage,
     TextBlock,
 )
 from legacylipi.core.unicode_converter import (
     ConversionResult,
-    UnicodeConversionError,
     UnicodeConverter,
     convert_to_unicode,
 )
@@ -157,7 +154,7 @@ class TestUnicodeConverter:
 
         # Either mapped or replaced with replacement char
         if "§" not in result.converted_text:
-            assert "\uFFFD" in result.converted_text or len(result.unmapped_chars) > 0
+            assert "\ufffd" in result.converted_text or len(result.unmapped_chars) > 0
 
 
 class TestUnicodeConverterWithKrutiDev:

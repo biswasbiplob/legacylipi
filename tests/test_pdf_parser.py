@@ -1,12 +1,11 @@
 """Tests for PDF Parser module."""
 
-import tempfile
 from pathlib import Path
 
 import fitz  # PyMuPDF
 import pytest
 
-from legacylipi.core.models import BoundingBox, PDFDocument, PDFPage, TextBlock
+from legacylipi.core.models import BoundingBox, PDFDocument
 from legacylipi.core.pdf_parser import PDFParseError, PDFParser, parse_pdf
 
 

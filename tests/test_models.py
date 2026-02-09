@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-import pytest
-
 from legacylipi.core.models import (
     BoundingBox,
     DetectionMethod,

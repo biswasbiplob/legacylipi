@@ -30,15 +30,11 @@ def sample_document():
         pages=[
             PDFPage(
                 page_number=1,
-                text_blocks=[
-                    TextBlock(raw_text="Page 1 content", unicode_text="Page 1 Unicode")
-                ],
+                text_blocks=[TextBlock(raw_text="Page 1 content", unicode_text="Page 1 Unicode")],
             ),
             PDFPage(
                 page_number=2,
-                text_blocks=[
-                    TextBlock(raw_text="Page 2 content", unicode_text="Page 2 Unicode")
-                ],
+                text_blocks=[TextBlock(raw_text="Page 2 content", unicode_text="Page 2 Unicode")],
             ),
         ],
     )
@@ -142,9 +138,7 @@ class TestTextOutput:
         assert "sample.pdf" in output
         assert "shree-lipi" in output
 
-    def test_generate_text_without_metadata(
-        self, sample_document, sample_encoding_result
-    ):
+    def test_generate_text_without_metadata(self, sample_document, sample_encoding_result):
         """Test text generation without metadata."""
         generator = OutputGenerator(include_metadata=False)
         output = generator.generate_text(
@@ -178,9 +172,7 @@ class TestTextOutput:
 
         assert "Custom translated content" in output
 
-    def test_generate_text_with_page_numbers(
-        self, sample_document, sample_encoding_result
-    ):
+    def test_generate_text_with_page_numbers(self, sample_document, sample_encoding_result):
         """Test text generation with page number markers."""
         generator = OutputGenerator(include_metadata=False, include_page_numbers=True)
         output = generator.generate_text(
@@ -226,9 +218,7 @@ class TestMarkdownOutput:
         assert "# Translation:" in output
         assert "| Property | Value |" in output
 
-    def test_generate_markdown_without_metadata(
-        self, sample_document, sample_encoding_result
-    ):
+    def test_generate_markdown_without_metadata(self, sample_document, sample_encoding_result):
         """Test Markdown generation without metadata."""
         generator = OutputGenerator(include_metadata=False)
         output = generator.generate_markdown(
@@ -238,9 +228,7 @@ class TestMarkdownOutput:
 
         assert "# Translation:" not in output
 
-    def test_generate_markdown_with_page_headers(
-        self, sample_document, sample_encoding_result
-    ):
+    def test_generate_markdown_with_page_headers(self, sample_document, sample_encoding_result):
         """Test Markdown generation with page headers."""
         generator = OutputGenerator(include_metadata=False, include_page_numbers=True)
         output = generator.generate_markdown(
@@ -354,9 +342,7 @@ class TestPDFOutput:
         # PDF should end with EOF marker
         assert b"%%EOF" in output
 
-    def test_generate_pdf_without_metadata(
-        self, sample_document, sample_encoding_result
-    ):
+    def test_generate_pdf_without_metadata(self, sample_document, sample_encoding_result):
         """Test PDF generation without metadata page."""
         generator = OutputGenerator(include_metadata=False)
         output = generator.generate_pdf(
@@ -416,9 +402,7 @@ class TestPDFOutput:
         assert isinstance(output, bytes)
         assert output.startswith(b"%PDF")
 
-    def test_generate_pdf_save_to_file(
-        self, sample_document, sample_encoding_result, temp_dir
-    ):
+    def test_generate_pdf_save_to_file(self, sample_document, sample_encoding_result, temp_dir):
         """Test saving PDF to file."""
         generator = OutputGenerator()
         output_path = temp_dir / "output.pdf"
@@ -487,9 +471,7 @@ class TestConvenienceFunction:
 
         assert "LegacyLipi" in output
 
-    def test_generate_output_without_translation(
-        self, sample_document, sample_encoding_result
-    ):
+    def test_generate_output_without_translation(self, sample_document, sample_encoding_result):
         """Test convenience function without translation."""
         output = generate_output(
             sample_document,
@@ -549,9 +531,7 @@ class TestPDFStructurePreservation:
         )
 
         generator = OutputGenerator(include_metadata=False)
-        output = generator.generate_pdf(
-            document, sample_encoding_result, preserve_structure=True
-        )
+        output = generator.generate_pdf(document, sample_encoding_result, preserve_structure=True)
 
         # Parse the output PDF and verify dimensions
         pdf = fitz.open(stream=output, filetype="pdf")
@@ -569,6 +549,7 @@ class TestPDFStructurePreservation:
     def test_pdf_preserves_text_positions(self, sample_encoding_result):
         """Test that PDF output preserves text block positions."""
         import fitz
+
         from legacylipi.core.models import BoundingBox
 
         # Create document with positioned text blocks
@@ -598,9 +579,7 @@ class TestPDFStructurePreservation:
         )
 
         generator = OutputGenerator(include_metadata=False)
-        output = generator.generate_pdf(
-            document, sample_encoding_result, preserve_structure=True
-        )
+        output = generator.generate_pdf(document, sample_encoding_result, preserve_structure=True)
 
         # PDF should be generated successfully
         pdf = fitz.open(stream=output, filetype="pdf")
@@ -630,9 +609,7 @@ class TestPDFStructurePreservation:
         )
 
         generator = OutputGenerator(include_metadata=False)
-        output = generator.generate_pdf(
-            document, sample_encoding_result, preserve_structure=False
-        )
+        output = generator.generate_pdf(document, sample_encoding_result, preserve_structure=False)
 
         # Parse the output PDF - should be A4
         pdf = fitz.open(stream=output, filetype="pdf")
@@ -661,9 +638,7 @@ class TestPDFStructurePreservation:
         )
 
         generator = OutputGenerator(include_metadata=True)
-        output = generator.generate_pdf(
-            document, sample_encoding_result, preserve_structure=True
-        )
+        output = generator.generate_pdf(document, sample_encoding_result, preserve_structure=True)
 
         # Parse the output PDF
         pdf = fitz.open(stream=output, filetype="pdf")
@@ -688,9 +663,7 @@ class TestPDFStructurePreservation:
                     page_number=1,
                     width=595.0,
                     height=842.0,
-                    text_blocks=[
-                        TextBlock(raw_text="Original", unicode_text="मराठी मजकूर")
-                    ],
+                    text_blocks=[TextBlock(raw_text="Original", unicode_text="मराठी मजकूर")],
                 ),
             ],
         )
@@ -731,9 +704,7 @@ class TestPDFStructurePreservation:
                     page_number=1,
                     width=500.0,  # Not A4
                     height=600.0,  # Not A4
-                    text_blocks=[
-                        TextBlock(raw_text="Original", unicode_text="Original text")
-                    ],
+                    text_blocks=[TextBlock(raw_text="Original", unicode_text="Original text")],
                 ),
             ],
         )
