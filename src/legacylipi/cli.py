@@ -175,6 +175,11 @@ def ui(port: int, host: str, no_browser: bool):
     is_flag=True,
     help="Preserve original text positions in PDF output (requires OCR mode and PDF format).",
 )
+@click.option(
+    "--bilingual",
+    is_flag=True,
+    help="Generate bilingual side-by-side output (Markdown format, ignores --format).",
+)
 def translate(
     input_file: Path,
     output: Path | None,
@@ -193,6 +198,7 @@ def translate(
     ocr_dpi: int,
     quiet: bool,
     structure_preserving: bool,
+    bilingual: bool,
 ):
     """Translate a PDF with legacy fonts to Unicode/English.
 
@@ -348,18 +354,43 @@ def translate(
 
                 engine = create_translator(translator, **translator_kwargs)
 
-                # Build text with page markers for page-by-page output preservation
-                # Format: "--- Page N ---\n<page text>\n\n--- Page N+1 ---\n..."
-                text_parts = []
-                for i, page in enumerate(converted_doc.pages, 1):
-                    page_text = page.unicode_text
-                    text_parts.append(f"--- Page {i} ---\n{page_text}")
-                unicode_text = "\n\n".join(text_parts)
+                # Translate each page individually to avoid page marker corruption
+                from legacylipi.core.language_utils import get_source_language
 
-                translation_result = engine.translate(
-                    unicode_text,
-                    source_lang="mr",
-                    target_lang=target_lang,
+                page_texts = [page.unicode_text for page in converted_doc.pages]
+                detected_encoding = encoding_result.detected_encoding
+                source_lang_code = get_source_language(detected_encoding)
+
+                import asyncio
+
+                translated_pages = asyncio.run(
+                    engine.translate_pages_async(
+                        page_texts,
+                        source_lang=source_lang_code,
+                        target_lang=target_lang,
+                    )
+                )
+
+                # Reassemble with page markers for output generation
+                text_parts = []
+                for i, translated_page in enumerate(translated_pages, 1):
+                    text_parts.append(f"--- Page {i} ---\n{translated_page}")
+                translated_text = "\n\n".join(text_parts)
+
+                # Create TranslationResult from the per-page translations
+                from legacylipi.core.models import TranslationResult
+
+                unicode_text = "\n\n".join(
+                    f"--- Page {i} ---\n{page.unicode_text}"
+                    for i, page in enumerate(converted_doc.pages, 1)
+                )
+                translation_result = TranslationResult(
+                    source_text=unicode_text,
+                    translated_text=translated_text,
+                    source_language=source_lang_code,
+                    target_language=target_lang,
+                    translation_backend=engine.backend_type,
+                    chunk_count=len(translated_pages),
                 )
 
                 # Check if translation actually happened (warnings indicate failures)
@@ -397,12 +428,24 @@ def translate(
             # Step 5: Generate output
             progress.update(task, description="Generating output...")
             generator = OutputGenerator()
-            output_content = generator.generate(
-                converted_doc,
-                encoding_result,
-                translation_result,
-                fmt,
-            )
+
+            if bilingual and translation_result:
+                # Bilingual output always uses Markdown format
+                output_content = generator.generate_bilingual(
+                    converted_doc,
+                    encoding_result,
+                    translation_result,
+                )
+                # Override output path extension
+                if output.suffix != ".md":
+                    output = output.with_suffix(".md")
+            else:
+                output_content = generator.generate(
+                    converted_doc,
+                    encoding_result,
+                    translation_result,
+                    fmt,
+                )
 
             # Save output
             generator.save(output_content, output)
