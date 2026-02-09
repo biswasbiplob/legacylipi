@@ -64,6 +64,23 @@ export default function TranslationSettings() {
         </select>
       </div>
 
+      {/* Bilingual output checkbox */}
+      <div>
+        <label className="flex items-center gap-3 cursor-pointer group">
+          <input
+            type="checkbox"
+            checked={state.bilingual}
+            onChange={(e) =>
+              dispatch({ type: 'UPDATE_SETTINGS', payload: { bilingual: e.target.checked } })
+            }
+            className="w-4 h-4 rounded border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] accent-[var(--color-primary)]"
+          />
+          <span className="text-sm text-[var(--color-text)] group-hover:text-[var(--color-primary-hover)] transition-colors">
+            Bilingual side-by-side output (Markdown)
+          </span>
+        </label>
+      </div>
+
       {/* Use OCR checkbox */}
       <div>
         <label className="flex items-center gap-3 cursor-pointer group">

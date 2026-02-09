@@ -65,6 +65,7 @@ export interface AppState {
   outputFormat: 'pdf' | 'text' | 'markdown';
   translationMode: 'structure_preserving' | 'flowing';
   translator: string;
+  bilingual: boolean;
 
   // Backend-specific settings
   openaiKey: string;
@@ -110,6 +111,7 @@ const initialState: AppState = {
   outputFormat: DEFAULT_OUTPUT_FORMAT,
   translationMode: DEFAULT_TRANSLATION_MODE,
   translator: DEFAULT_TRANSLATOR,
+  bilingual: false,
 
   openaiKey: '',
   openaiModel: DEFAULT_OPENAI_MODEL,
@@ -214,6 +216,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         outputFormat,
         translationMode,
         translator,
+        bilingual,
         openaiKey,
         openaiModel,
         ollamaModel,
@@ -235,6 +238,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...(outputFormat !== undefined && { outputFormat }),
         ...(translationMode !== undefined && { translationMode }),
         ...(translator !== undefined && { translator }),
+        ...(bilingual !== undefined && { bilingual }),
         ...(openaiKey !== undefined && { openaiKey }),
         ...(openaiModel !== undefined && { openaiModel }),
         ...(ollamaModel !== undefined && { ollamaModel }),

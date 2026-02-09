@@ -48,6 +48,7 @@ export function useProcessing() {
             output_format: state.outputFormat,
             translation_mode: state.translationMode,
             translator: state.translator,
+            bilingual: state.bilingual,
             use_ocr: state.useOcr,
             ocr_engine: state.ocrEngine,
             ocr_lang: state.ocrLang,

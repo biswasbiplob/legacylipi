@@ -1170,6 +1170,11 @@ Generated: {metadata.generated_at}"""
         Returns:
             Path to a Unicode-capable font file, or None if not found.
         """
+        # Check bundled font first
+        bundled_font = Path(__file__).parent.parent / "fonts" / "NotoSansDevanagari-Regular.ttf"
+        if bundled_font.exists():
+            return str(bundled_font)
+
         # Common Unicode/Devanagari font paths (in order of preference)
         font_paths = [
             # Linux - Noto fonts (best Unicode coverage)
@@ -1367,6 +1372,7 @@ Generated: {metadata.generated_at}"""
         translation_result: TranslationResult | None = None,
         output_format: OutputFormat = OutputFormat.TEXT,
         translated_text: str | None = None,
+        bilingual: bool = False,
     ) -> str | bytes:
         """Generate output in the specified format.
 
@@ -1376,6 +1382,7 @@ Generated: {metadata.generated_at}"""
             translation_result: The translation result.
             output_format: Desired output format.
             translated_text: Optional translated text to use.
+            bilingual: If True, generate bilingual side-by-side output.
 
         Returns:
             Formatted output string (for text/markdown) or bytes (for PDF).
@@ -1383,6 +1390,9 @@ Generated: {metadata.generated_at}"""
         Raises:
             ValueError: If output format is not supported.
         """
+        if bilingual and translation_result:
+            return self.generate_bilingual(document, encoding_result, translation_result)
+
         if output_format == OutputFormat.TEXT:
             return self.generate_text(
                 document, encoding_result, translation_result, translated_text
