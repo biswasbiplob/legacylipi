@@ -9,7 +9,7 @@ echo "Running pre-commit checks..."
 echo "========================================"
 
 echo ""
-echo "1/4 Running code formatting (ruff format)..."
+echo "1/5 Running code formatting (ruff format)..."
 echo "----------------------------------------"
 uv run ruff format src/ --check || {
     echo ""
@@ -18,19 +18,31 @@ uv run ruff format src/ --check || {
 }
 
 echo ""
-echo "2/4 Running linting (ruff check)..."
+echo "2/5 Running linting (ruff check)..."
 echo "----------------------------------------"
 uv run ruff check src/
 
 echo ""
-echo "3/4 Running type checking (mypy)..."
+echo "3/5 Running type checking (mypy)..."
 echo "----------------------------------------"
 uv run mypy src/legacylipi --ignore-missing-imports
 
 echo ""
-echo "4/4 Running tests (pytest)..."
+echo "4/5 Running Python tests (pytest)..."
 echo "----------------------------------------"
 uv run pytest tests/ -v --tb=short
+
+echo ""
+echo "5/5 Running frontend checks..."
+echo "----------------------------------------"
+if [ -d "frontend" ] && [ -f "frontend/package.json" ]; then
+    cd frontend
+    npx tsc --noEmit
+    echo "TypeScript: OK"
+    cd ..
+else
+    echo "Frontend not found, skipping."
+fi
 
 echo ""
 echo "========================================"

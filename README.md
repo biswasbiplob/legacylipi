@@ -24,17 +24,24 @@ cd legacylipi
 uv sync
 ```
 
+### Frontend (for development)
+
+```bash
+cd frontend
+npm install
+```
+
 ### Usage
 
 ```bash
 # CLI translation
 legacylipi translate input.pdf -o output.txt
 
-# Launch web UI
-legacylipi ui
+# Launch React web UI (production build served by FastAPI)
+legacylipi api
 
-# Launch UI on custom port
-legacylipi ui --port 3000
+# Launch legacy NiceGUI web UI (deprecated)
+legacylipi ui
 ```
 
 ## Problem
@@ -125,15 +132,38 @@ See [docs/cli-reference.md](docs/cli-reference.md) for complete CLI documentatio
 
 ## Web UI
 
-LegacyLipi includes a web interface for easy PDF translation without command-line usage.
+LegacyLipi includes a modern React-based web interface backed by a FastAPI REST API.
+
+### Production (single command)
 
 ```bash
-uv run legacylipi-ui
+# Serves the built React frontend + API on one port
+uv run legacylipi api
+# or
+uv run legacylipi-web
 ```
 
-Open **http://localhost:8080** in your browser.
+Open **http://localhost:8000** in your browser.
 
-![LegacyLipi Web UI](docs/images/ui-ready.png)
+### Development (hot-reload)
+
+```bash
+# Start both FastAPI backend and Vite dev server
+./scripts/dev.sh
+```
+
+This runs:
+- **Backend** at http://localhost:8000 (FastAPI with auto-reload)
+- **Frontend** at http://localhost:5173 (Vite dev server with HMR, proxies `/api` to backend)
+
+### Legacy NiceGUI UI (deprecated)
+
+The original NiceGUI-based UI is still available but deprecated:
+
+```bash
+uv run legacylipi ui
+# Open http://localhost:8080
+```
 
 **Workflow Modes:**
 - **Scanned Copy** - Create image-based PDF copy (adjust DPI, color, quality)
@@ -143,11 +173,12 @@ Open **http://localhost:8080** in your browser.
 **Features:**
 - Drag-and-drop PDF upload
 - Workflow-based UI with mode selection
-- Multiple translation backends
-- OCR support with language selection
+- Multiple translation backends (Translate-Shell, Google, Ollama, OpenAI, etc.)
+- OCR support with engine and language selection
 - Structure-preserving or flowing text modes
-- Real-time progress tracking
+- Real-time SSE progress streaming
 - Direct download of translated files
+- Responsive dark-theme design
 
 ## Translation Backends
 
@@ -178,12 +209,15 @@ See [docs/translation-backends.md](docs/translation-backends.md) for detailed se
 
 | Command | Description |
 |---------|-------------|
+| `api` | Launch the React web UI + FastAPI REST API |
 | `translate` | Full pipeline: parse → detect → convert → translate → output |
 | `convert` | Convert legacy encoding to Unicode (no translation) |
 | `extract` | Extract text from PDF (OCR or font-based) |
 | `detect` | Analyze PDF and report detected encoding |
+| `scan-copy` | Create an image-based scanned copy of a PDF |
 | `encodings` | List supported font encodings |
 | `usage` | Show API usage statistics |
+| `ui` | Launch legacy NiceGUI web interface (deprecated) |
 
 See [docs/cli-reference.md](docs/cli-reference.md) for full command reference.
 
@@ -196,40 +230,30 @@ See [docs/development.md](docs/development.md) for setup instructions, running t
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                              LegacyLipi                                 │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
+├─────────────────────┬───────────────────────────────────────────────────┤
+│   React Frontend    │                  FastAPI Backend                   │
+│  (Vite + TS + TW)   │                                                   │
+│                     │   ┌──────────────────────────────────────────┐    │
+│  FileUploader       │   │              REST API                    │    │
+│  WorkflowSelector   │   │  /api/v1/config/*     GET config         │    │
+│  Settings panels    │◄─▶│  /api/v1/sessions/*   Upload/delete      │    │
+│  StatusPanel (SSE)  │   │  /api/v1/sessions/*/  Start pipeline     │    │
+│  DownloadButton     │   │  /api/v1/sessions/*/progress  SSE stream │    │
+│                     │   │  /api/v1/sessions/*/download  Get result │    │
+│                     │   └────────────────────┬─────────────────────┘    │
+├─────────────────────┘                        │                          │
+│                                              ▼                          │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
-│  │                      Text Extraction                             │   │
-│  │  ┌──────────────┐              ┌──────────────┐                  │   │
-│  │  │   PDF        │    OR        │   OCR        │                  │   │
-│  │  │   Parser     │              │   Parser     │                  │   │
-│  │  │ (font-based) │              │ (Tesseract)  │                  │   │
-│  │  └──────────────┘              └──────────────┘                  │   │
+│  │                      Core Pipeline                               │   │
+│  │                                                                  │   │
+│  │  PDF Parser / OCR Parser                                         │   │
+│  │       │                                                          │   │
+│  │  Encoding Detector → Unicode Converter                           │   │
+│  │       │                                                          │   │
+│  │  Translation Engine (trans, Google, Ollama, OpenAI, GCP, ...)    │   │
+│  │       │                                                          │   │
+│  │  Output Generator (.txt, .md, .pdf)                              │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
-│         │                                │                              │
-│         ▼                                ▼                              │
-│  ┌──────────────┐    ┌──────────────┐                                   │
-│  │   Encoding   │───▶│   Unicode    │◀──── (OCR output is               │
-│  │   Detector   │    │   Converter  │       already Unicode)            │
-│  └──────────────┘    └──────────────┘                                   │
-│                             │                                           │
-│                             ▼                                           │
-│         ┌───────────────────────────────────────────────────────────┐   │
-│         │                 Translation Engine                        │   │
-│         │  ┌────────┬────────┬──────────┬────────┬────────┬─────┐   │   │
-│         │  │ trans  │ Google │ MyMemory │ Ollama │ OpenAI │ GCP │   │   │
-│         │  │ (CLI)  │ Trans. │  (API)   │(Local) │ (API)  │Cloud│   │   │
-│         │  └────────┴────────┴──────────┴────────┴────────┴─────┘   │   │
-│         └───────────────────────────────────────────────────────────┘   │
-│                             │                                           │
-│                             ▼                                           │
-│         ┌───────────────────────────────────────────────┐               │
-│         │            Output Generator                   │               │
-│         │  ┌──────┬────────┬───────┐                    │               │
-│         │  │ .txt │  .md   │ .pdf  │                    │               │
-│         │  └──────┴────────┴───────┘                    │               │
-│         └───────────────────────────────────────────────┘               │
-│                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 

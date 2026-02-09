@@ -58,9 +58,22 @@ legacylipi/
 │   │   ├── unicode_converter.py # Legacy to Unicode conversion
 │   │   ├── translator.py        # Translation backends (Google, Ollama, OpenAI, etc.)
 │   │   └── output_generator.py  # Output generation (PDF, text, markdown)
+│   ├── api/                     # FastAPI REST API
+│   │   ├── main.py              # App setup, CORS, static file serving
+│   │   ├── schemas.py           # Pydantic request/response models
+│   │   ├── session_manager.py   # In-memory sessions with TTL cleanup
+│   │   ├── pipeline.py          # Async pipeline runners
+│   │   ├── deps.py              # Dependency injection
+│   │   └── routes/              # config, sessions, processing, progress, download
 │   ├── ui/
-│   │   └── app.py               # NiceGUI web interface
+│   │   └── app.py               # NiceGUI web interface (deprecated)
 │   └── cli.py                   # Command-line interface
+├── frontend/                    # React + TypeScript + Tailwind CSS v4
+│   └── src/
+│       ├── lib/                 # types, api, constants
+│       ├── context/             # AppContext (useReducer)
+│       ├── hooks/               # useFileUpload, useProgress, useProcessing, useDownload, useConfig
+│       └── components/          # UI components
 ```
 
 ## Key Data Models (models.py)
@@ -192,8 +205,16 @@ In the web UI, use the "Quick Actions" card:
 
 ```bash
 cd legacylipi
-uv run python -m legacylipi.ui.app    # Web UI
-uv run python -m legacylipi.cli       # CLI
+
+# React Web UI (FastAPI + React frontend)
+uv run legacylipi api                  # Production: serves built frontend on :8000
+./scripts/dev.sh                       # Development: FastAPI :8000 + Vite HMR :5173
+
+# Legacy NiceGUI Web UI (deprecated)
+uv run python -m legacylipi.ui.app     # NiceGUI on :8080
+
+# CLI
+uv run python -m legacylipi.cli        # CLI commands
 ```
 
 ## Pre-Commit Checks

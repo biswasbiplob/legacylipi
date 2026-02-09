@@ -1015,6 +1015,18 @@ def list_encodings(search: str | None):
 
 
 @main.command()
+@click.option("--port", default=8000, type=int, help="Port to run the API on.")
+@click.option("--host", default="0.0.0.0", help="Host to bind to.")
+def api(port: int, host: str):
+    """Launch the LegacyLipi REST API + React frontend."""
+    from legacylipi.api.main import serve
+
+    print_banner()
+    console.print(f"[bold green]Starting API server on http://{host}:{port}[/bold green]")
+    serve(host=host, port=port)
+
+
+@main.command()
 @click.option(
     "--service",
     type=str,
