@@ -84,6 +84,10 @@ export interface ConfigOptions {
   ocr_engines: Record<string, string>;
 }
 
+export interface ConfigSourceLanguages {
+  languages: Record<string, string[]>;
+}
+
 // ---------------------------------------------------------------------------
 // App-level Types
 // ---------------------------------------------------------------------------

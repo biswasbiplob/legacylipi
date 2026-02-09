@@ -6,18 +6,53 @@ const DEFAULT_TRANSLATION_MODES: Record<string, string> = {
   flowing: 'Flowing Text',
 };
 
+const SOURCE_LANGUAGE_LABELS: Record<string, string> = {
+  mr: 'Marathi',
+  hi: 'Hindi',
+  ta: 'Tamil',
+  te: 'Telugu',
+  kn: 'Kannada',
+  ml: 'Malayalam',
+  bn: 'Bengali',
+  gu: 'Gujarati',
+  pa: 'Punjabi',
+  sa: 'Sanskrit',
+};
+
 export default function TranslationSettings() {
   const state = useAppState();
   const dispatch = useAppDispatch();
 
   const targetLanguages = state.config.languages?.target ?? {};
   const translationModes = state.config.options?.translation_modes ?? DEFAULT_TRANSLATION_MODES;
+  const sourceLanguages = state.config.sourceLanguages?.languages ?? {};
 
   return (
     <div className="bg-[var(--color-surface-alt)] border border-[var(--color-border)] rounded-xl p-5 space-y-4">
       <h3 className="text-sm font-semibold text-[var(--color-text)] tracking-wide uppercase">
         Translation Settings
       </h3>
+
+      {/* Source Language */}
+      <div>
+        <label className="text-sm font-medium text-[var(--color-text-muted)] mb-1.5 block">
+          Source Language
+        </label>
+        <select
+          value={state.sourceLang}
+          onChange={(e) =>
+            dispatch({ type: 'UPDATE_SETTINGS', payload: { sourceLang: e.target.value } })
+          }
+          className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]"
+        >
+          <option value="">Auto-detect (from encoding)</option>
+          {Object.keys(sourceLanguages).map((code) => (
+            <option key={code} value={code}>
+              {SOURCE_LANGUAGE_LABELS[code] ?? code}
+            </option>
+          ))}
+        </select>
+      </div>
 
       {/* Target Language */}
       <div>

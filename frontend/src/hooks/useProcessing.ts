@@ -45,6 +45,7 @@ export function useProcessing() {
         case 'translate': {
           const config: TranslateRequest = {
             target_lang: state.targetLang,
+            ...(state.sourceLang && { source_lang: state.sourceLang }),
             output_format: state.outputFormat,
             translation_mode: state.translationMode,
             translator: state.translator,

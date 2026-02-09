@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAppDispatch } from '../context/AppContext';
-import { fetchLanguages, fetchTranslators, fetchOptions } from '../lib/api';
+import { fetchLanguages, fetchTranslators, fetchOptions, fetchSourceLanguages } from '../lib/api';
 
 export function useConfig() {
   const dispatch = useAppDispatch();
@@ -12,10 +12,11 @@ export function useConfig() {
 
     async function loadConfig() {
       try {
-        const [languages, translators, options] = await Promise.all([
+        const [languages, translators, options, sourceLanguages] = await Promise.all([
           fetchLanguages(),
           fetchTranslators(),
           fetchOptions(),
+          fetchSourceLanguages(),
         ]);
 
         if (cancelled) return;
@@ -23,6 +24,7 @@ export function useConfig() {
         dispatch({ type: 'SET_CONFIG_LANGUAGES', payload: languages });
         dispatch({ type: 'SET_CONFIG_TRANSLATORS', payload: translators });
         dispatch({ type: 'SET_CONFIG_OPTIONS', payload: options });
+        dispatch({ type: 'SET_CONFIG_SOURCE_LANGUAGES', payload: sourceLanguages });
       } catch (err) {
         if (cancelled) return;
         const message =
