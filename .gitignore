@@ -60,3 +60,6 @@ Thumbs.db
 .playwright-mcp/
 *.pdf
 !tests/fixtures/*.pdf
+
+# ruff cache
+.ruff_cache/
