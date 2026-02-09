@@ -22,9 +22,11 @@ class ConvertRequest(BaseModel):
 
 class TranslateRequest(BaseModel):
     target_lang: str = "en"
+    source_lang: str | None = None  # Auto-detected from encoding if not provided
     output_format: Literal["pdf", "text", "markdown"] = "pdf"
     translation_mode: Literal["structure_preserving", "flowing"] = "structure_preserving"
     translator: str = "trans"
+    bilingual: bool = False  # Generate bilingual side-by-side output
     use_ocr: bool = False
     ocr_engine: Literal["easyocr", "tesseract"] = "easyocr"
     ocr_lang: str = "mar"
