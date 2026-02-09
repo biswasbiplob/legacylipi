@@ -10,11 +10,31 @@ from pathlib import Path
 
 import yaml
 
+from legacylipi.mappings.aps_dv import (
+    APS_DV_HALF_FORMS,
+    APS_DV_LIGATURES,
+    APS_DV_MAPPINGS,
+)
+from legacylipi.mappings.chanakya import (
+    CHANAKYA_HALF_FORMS,
+    CHANAKYA_LIGATURES,
+    CHANAKYA_MAPPINGS,
+)
 from legacylipi.mappings.dvb_tt import DVB_TT_WORD_PATTERNS, get_dvb_tt_mapping
 from legacylipi.mappings.shree_dev import (
     SHREE_DEV_HALF_FORMS,
     SHREE_DEV_LIGATURES,
     SHREE_DEV_MAPPINGS,
+)
+from legacylipi.mappings.shusha import (
+    SHUSHA_HALF_FORMS,
+    SHUSHA_LIGATURES,
+    SHUSHA_MAPPINGS,
+)
+from legacylipi.mappings.walkman_chanakya import (
+    WALKMAN_CHANAKYA_HALF_FORMS,
+    WALKMAN_CHANAKYA_LIGATURES,
+    WALKMAN_CHANAKYA_MAPPINGS,
 )
 
 
@@ -481,6 +501,46 @@ BUILTIN_MAPPINGS: dict[str, MappingTable] = {
             "SHREE-DEV-0715",
             "SHREE-DEV-0721",
         ],
+    ),
+    "chanakya": MappingTable(
+        encoding_name="chanakya",
+        font_family="Chanakya",
+        language="Hindi",
+        script="Devanagari",
+        mappings=CHANAKYA_MAPPINGS,
+        ligatures=CHANAKYA_LIGATURES,
+        half_forms=CHANAKYA_HALF_FORMS,
+        variants=["Chanakya", "ChanakyaFont"],
+    ),
+    "aps-dv": MappingTable(
+        encoding_name="aps-dv",
+        font_family="APS-DV",
+        language="Hindi",
+        script="Devanagari",
+        mappings=APS_DV_MAPPINGS,
+        ligatures=APS_DV_LIGATURES,
+        half_forms=APS_DV_HALF_FORMS,
+        variants=["APS-DV", "APS-C-DV"],
+    ),
+    "walkman-chanakya": MappingTable(
+        encoding_name="walkman-chanakya",
+        font_family="Walkman-Chanakya",
+        language="Hindi",
+        script="Devanagari",
+        mappings=WALKMAN_CHANAKYA_MAPPINGS,
+        ligatures=WALKMAN_CHANAKYA_LIGATURES,
+        half_forms=WALKMAN_CHANAKYA_HALF_FORMS,
+        variants=["Walkman-Chanakya", "WM-Chanakya"],
+    ),
+    "shusha": MappingTable(
+        encoding_name="shusha",
+        font_family="Shusha",
+        language="Marathi",
+        script="Devanagari",
+        mappings=SHUSHA_MAPPINGS,
+        ligatures=SHUSHA_LIGATURES,
+        half_forms=SHUSHA_HALF_FORMS,
+        variants=["Shusha", "Shushaa"],
     ),
 }
 
