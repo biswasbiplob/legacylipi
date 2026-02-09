@@ -1,0 +1,11 @@
+services:
+  legacylipi:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/input:/app/input
+      - ./data/output:/app/output
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
