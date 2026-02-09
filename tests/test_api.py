@@ -66,7 +66,9 @@ class TestSessionEndpoints:
         pdf_path.write_bytes(b"%PDF-1.4 fake content")
 
         with open(pdf_path, "rb") as f:
-            resp = client.post("/api/v1/sessions/upload", files={"file": ("test.pdf", f, "application/pdf")})
+            resp = client.post(
+                "/api/v1/sessions/upload", files={"file": ("test.pdf", f, "application/pdf")}
+            )
 
         assert resp.status_code == 200
         data = resp.json()
@@ -79,7 +81,9 @@ class TestSessionEndpoints:
         txt_path.write_text("not a pdf")
 
         with open(txt_path, "rb") as f:
-            resp = client.post("/api/v1/sessions/upload", files={"file": ("test.txt", f, "text/plain")})
+            resp = client.post(
+                "/api/v1/sessions/upload", files={"file": ("test.txt", f, "text/plain")}
+            )
 
         assert resp.status_code == 400
         assert "PDF" in resp.json()["detail"]
@@ -90,7 +94,9 @@ class TestSessionEndpoints:
         pdf_path.write_bytes(b"%PDF-1.4 fake content")
 
         with open(pdf_path, "rb") as f:
-            resp = client.post("/api/v1/sessions/upload", files={"file": ("test.pdf", f, "application/pdf")})
+            resp = client.post(
+                "/api/v1/sessions/upload", files={"file": ("test.pdf", f, "application/pdf")}
+            )
         session_id = resp.json()["session_id"]
 
         # Delete
@@ -107,7 +113,9 @@ class TestProcessingEndpoints:
         pdf_path = tmp_path / "test.pdf"
         pdf_path.write_bytes(b"%PDF-1.4 fake content")
         with open(pdf_path, "rb") as f:
-            resp = client.post("/api/v1/sessions/upload", files={"file": ("test.pdf", f, "application/pdf")})
+            resp = client.post(
+                "/api/v1/sessions/upload", files={"file": ("test.pdf", f, "application/pdf")}
+            )
         return resp.json()["session_id"]
 
     def test_scan_copy_returns_job_id(self, client: TestClient, tmp_path):
@@ -123,7 +131,12 @@ class TestProcessingEndpoints:
         session_id = self._upload(client, tmp_path)
         resp = client.post(
             f"/api/v1/sessions/{session_id}/convert",
-            json={"ocr_engine": "easyocr", "ocr_lang": "mar", "ocr_dpi": 300, "output_format": "pdf"},
+            json={
+                "ocr_engine": "easyocr",
+                "ocr_lang": "mar",
+                "ocr_dpi": 300,
+                "output_format": "pdf",
+            },
         )
         assert resp.status_code == 200
         assert "job_id" in resp.json()
@@ -150,7 +163,9 @@ class TestDownloadEndpoint:
         pdf_path = tmp_path / "test.pdf"
         pdf_path.write_bytes(b"%PDF-1.4 fake content")
         with open(pdf_path, "rb") as f:
-            resp = client.post("/api/v1/sessions/upload", files={"file": ("test.pdf", f, "application/pdf")})
+            resp = client.post(
+                "/api/v1/sessions/upload", files={"file": ("test.pdf", f, "application/pdf")}
+            )
         session_id = resp.json()["session_id"]
 
         resp = client.get(f"/api/v1/sessions/{session_id}/download")

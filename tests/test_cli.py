@@ -1,8 +1,5 @@
 """Tests for CLI module."""
 
-import tempfile
-from pathlib import Path
-
 import fitz
 import pytest
 from click.testing import CliRunner
@@ -99,11 +96,15 @@ class TestConvertCommand:
         """Test basic Unicode conversion."""
         output_path = temp_dir / "output.txt"
 
-        result = runner.invoke(main, [
-            "convert",
-            str(sample_pdf),
-            "-o", str(output_path),
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "convert",
+                str(sample_pdf),
+                "-o",
+                str(output_path),
+            ],
+        )
 
         assert result.exit_code == 0
         assert output_path.exists()
@@ -113,12 +114,17 @@ class TestConvertCommand:
         """Test conversion with forced encoding."""
         output_path = temp_dir / "output.txt"
 
-        result = runner.invoke(main, [
-            "convert",
-            str(sample_pdf),
-            "-o", str(output_path),
-            "--encoding", "shree-lipi",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "convert",
+                str(sample_pdf),
+                "-o",
+                str(output_path),
+                "--encoding",
+                "shree-lipi",
+            ],
+        )
 
         assert result.exit_code == 0
         assert output_path.exists()
@@ -143,12 +149,17 @@ class TestTranslateCommand:
         """Test basic translation with mock backend."""
         output_path = temp_dir / "output.txt"
 
-        result = runner.invoke(main, [
-            "translate",
-            str(sample_pdf),
-            "-o", str(output_path),
-            "--translator", "mock",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "translate",
+                str(sample_pdf),
+                "-o",
+                str(output_path),
+                "--translator",
+                "mock",
+            ],
+        )
 
         assert result.exit_code == 0
         assert output_path.exists()
@@ -157,13 +168,18 @@ class TestTranslateCommand:
         """Test quiet translation."""
         output_path = temp_dir / "output.txt"
 
-        result = runner.invoke(main, [
-            "translate",
-            str(sample_pdf),
-            "-o", str(output_path),
-            "--translator", "mock",
-            "--quiet",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "translate",
+                str(sample_pdf),
+                "-o",
+                str(output_path),
+                "--translator",
+                "mock",
+                "--quiet",
+            ],
+        )
 
         assert result.exit_code == 0
         # Quiet mode should have minimal output
@@ -173,13 +189,19 @@ class TestTranslateCommand:
         """Test translation with Markdown output."""
         output_path = temp_dir / "output.md"
 
-        result = runner.invoke(main, [
-            "translate",
-            str(sample_pdf),
-            "-o", str(output_path),
-            "--format", "markdown",
-            "--translator", "mock",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "translate",
+                str(sample_pdf),
+                "-o",
+                str(output_path),
+                "--format",
+                "markdown",
+                "--translator",
+                "mock",
+            ],
+        )
 
         assert result.exit_code == 0
         assert output_path.exists()
@@ -191,12 +213,16 @@ class TestTranslateCommand:
         """Test translation with --no-translate flag."""
         output_path = temp_dir / "output.txt"
 
-        result = runner.invoke(main, [
-            "translate",
-            str(sample_pdf),
-            "-o", str(output_path),
-            "--no-translate",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "translate",
+                str(sample_pdf),
+                "-o",
+                str(output_path),
+                "--no-translate",
+            ],
+        )
 
         assert result.exit_code == 0
         assert output_path.exists()
@@ -207,22 +233,31 @@ class TestTranslateCommand:
         """Test translation with forced encoding."""
         output_path = temp_dir / "output.txt"
 
-        result = runner.invoke(main, [
-            "translate",
-            str(sample_pdf),
-            "-o", str(output_path),
-            "--encoding", "shree-lipi",
-            "--translator", "mock",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "translate",
+                str(sample_pdf),
+                "-o",
+                str(output_path),
+                "--encoding",
+                "shree-lipi",
+                "--translator",
+                "mock",
+            ],
+        )
 
         assert result.exit_code == 0
 
     def test_translate_nonexistent_file(self, runner):
         """Test translation with nonexistent file."""
-        result = runner.invoke(main, [
-            "translate",
-            "/nonexistent/file.pdf",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "translate",
+                "/nonexistent/file.pdf",
+            ],
+        )
 
         assert result.exit_code != 0
 
@@ -254,13 +289,19 @@ class TestOutputFormats:
         """Test explicit text format option."""
         output_path = temp_dir / "output.txt"
 
-        result = runner.invoke(main, [
-            "translate",
-            str(sample_pdf),
-            "-o", str(output_path),
-            "--format", "text",
-            "--translator", "mock",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "translate",
+                str(sample_pdf),
+                "-o",
+                str(output_path),
+                "--format",
+                "text",
+                "--translator",
+                "mock",
+            ],
+        )
 
         assert result.exit_code == 0
         content = output_path.read_text()
@@ -270,13 +311,19 @@ class TestOutputFormats:
         """Test 'md' as alias for markdown format."""
         output_path = temp_dir / "output.md"
 
-        result = runner.invoke(main, [
-            "translate",
-            str(sample_pdf),
-            "-o", str(output_path),
-            "--format", "md",
-            "--translator", "mock",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "translate",
+                str(sample_pdf),
+                "-o",
+                str(output_path),
+                "--format",
+                "md",
+                "--translator",
+                "mock",
+            ],
+        )
 
         assert result.exit_code == 0
         content = output_path.read_text()
@@ -286,13 +333,19 @@ class TestOutputFormats:
         """Test PDF format option."""
         output_path = temp_dir / "output.pdf"
 
-        result = runner.invoke(main, [
-            "translate",
-            str(sample_pdf),
-            "-o", str(output_path),
-            "--format", "pdf",
-            "--translator", "mock",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "translate",
+                str(sample_pdf),
+                "-o",
+                str(output_path),
+                "--format",
+                "pdf",
+                "--translator",
+                "mock",
+            ],
+        )
 
         assert result.exit_code == 0
         assert output_path.exists()
@@ -302,12 +355,17 @@ class TestOutputFormats:
     def test_pdf_default_extension(self, runner, sample_pdf, temp_dir):
         """Test that PDF format uses .pdf extension by default."""
         # Don't specify output path - let it use default
-        result = runner.invoke(main, [
-            "translate",
-            str(sample_pdf),
-            "--format", "pdf",
-            "--translator", "mock",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "translate",
+                str(sample_pdf),
+                "--format",
+                "pdf",
+                "--translator",
+                "mock",
+            ],
+        )
 
         assert result.exit_code == 0
         # Check that it created a .pdf file with the same base name
@@ -324,23 +382,32 @@ class TestTranslatorOptions:
         """Test mock translator backend."""
         output_path = temp_dir / "output.txt"
 
-        result = runner.invoke(main, [
-            "translate",
-            str(sample_pdf),
-            "-o", str(output_path),
-            "--translator", "mock",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "translate",
+                str(sample_pdf),
+                "-o",
+                str(output_path),
+                "--translator",
+                "mock",
+            ],
+        )
 
         assert result.exit_code == 0
         assert "mock" in result.output.lower() or output_path.exists()
 
     def test_invalid_translator(self, runner, sample_pdf, temp_dir):
         """Test invalid translator option is handled by Click."""
-        result = runner.invoke(main, [
-            "translate",
-            str(sample_pdf),
-            "--translator", "invalid",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "translate",
+                str(sample_pdf),
+                "--translator",
+                "invalid",
+            ],
+        )
 
         # Click should reject invalid choice
         assert result.exit_code != 0
@@ -363,11 +430,15 @@ class TestExtractCommand:
         """Test basic text extraction (font-based)."""
         output_path = temp_dir / "output.txt"
 
-        result = runner.invoke(main, [
-            "extract",
-            str(sample_pdf),
-            "-o", str(output_path),
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "extract",
+                str(sample_pdf),
+                "-o",
+                str(output_path),
+            ],
+        )
 
         assert result.exit_code == 0
         assert output_path.exists()
@@ -377,12 +448,16 @@ class TestExtractCommand:
         """Test quiet extraction."""
         output_path = temp_dir / "output.txt"
 
-        result = runner.invoke(main, [
-            "extract",
-            str(sample_pdf),
-            "-o", str(output_path),
-            "--quiet",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "extract",
+                str(sample_pdf),
+                "-o",
+                str(output_path),
+                "--quiet",
+            ],
+        )
 
         assert result.exit_code == 0
         assert output_path.exists()
@@ -405,12 +480,17 @@ class TestExtractCommand:
         """Test extraction with Markdown output."""
         output_path = temp_dir / "output.md"
 
-        result = runner.invoke(main, [
-            "extract",
-            str(sample_pdf),
-            "-o", str(output_path),
-            "--format", "markdown",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "extract",
+                str(sample_pdf),
+                "-o",
+                str(output_path),
+                "--format",
+                "markdown",
+            ],
+        )
 
         assert result.exit_code == 0
         assert output_path.exists()
@@ -422,12 +502,17 @@ class TestExtractCommand:
         """Test extraction with PDF output."""
         output_path = temp_dir / "output.pdf"
 
-        result = runner.invoke(main, [
-            "extract",
-            str(sample_pdf),
-            "-o", str(output_path),
-            "--format", "pdf",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "extract",
+                str(sample_pdf),
+                "-o",
+                str(output_path),
+                "--format",
+                "pdf",
+            ],
+        )
 
         assert result.exit_code == 0
         assert output_path.exists()
@@ -438,22 +523,30 @@ class TestExtractCommand:
         """Test extraction with forced encoding."""
         output_path = temp_dir / "output.txt"
 
-        result = runner.invoke(main, [
-            "extract",
-            str(sample_pdf),
-            "-o", str(output_path),
-            "--encoding", "shree-lipi",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "extract",
+                str(sample_pdf),
+                "-o",
+                str(output_path),
+                "--encoding",
+                "shree-lipi",
+            ],
+        )
 
         assert result.exit_code == 0
         assert output_path.exists()
 
     def test_extract_nonexistent_file(self, runner):
         """Test extraction with nonexistent file."""
-        result = runner.invoke(main, [
-            "extract",
-            "/nonexistent/file.pdf",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "extract",
+                "/nonexistent/file.pdf",
+            ],
+        )
 
         assert result.exit_code != 0
 
@@ -461,11 +554,15 @@ class TestExtractCommand:
         """Test that summary shows extraction method."""
         output_path = temp_dir / "output.txt"
 
-        result = runner.invoke(main, [
-            "extract",
-            str(sample_pdf),
-            "-o", str(output_path),
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "extract",
+                str(sample_pdf),
+                "-o",
+                str(output_path),
+            ],
+        )
 
         assert result.exit_code == 0
         assert "Font-based" in result.output
@@ -478,11 +575,15 @@ class TestScanCopyCommand:
         """Test basic scanned copy creation."""
         output_path = temp_dir / "scanned.pdf"
 
-        result = runner.invoke(main, [
-            "scan-copy",
-            str(sample_pdf),
-            "-o", str(output_path),
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "scan-copy",
+                str(sample_pdf),
+                "-o",
+                str(output_path),
+            ],
+        )
 
         assert result.exit_code == 0
         assert output_path.exists()
@@ -492,10 +593,13 @@ class TestScanCopyCommand:
 
     def test_scan_copy_default_output(self, runner, sample_pdf):
         """Test scan-copy creates default output filename."""
-        result = runner.invoke(main, [
-            "scan-copy",
-            str(sample_pdf),
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "scan-copy",
+                str(sample_pdf),
+            ],
+        )
 
         assert result.exit_code == 0
         # Default output should be input_scanned.pdf
@@ -508,12 +612,17 @@ class TestScanCopyCommand:
         """Test scan-copy with DPI option."""
         output_path = temp_dir / "scanned.pdf"
 
-        result = runner.invoke(main, [
-            "scan-copy",
-            str(sample_pdf),
-            "-o", str(output_path),
-            "--dpi", "150",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "scan-copy",
+                str(sample_pdf),
+                "-o",
+                str(output_path),
+                "--dpi",
+                "150",
+            ],
+        )
 
         assert result.exit_code == 0
         assert output_path.exists()
@@ -524,22 +633,32 @@ class TestScanCopyCommand:
         output_bw = temp_dir / "bw.pdf"
 
         # Test grayscale
-        result = runner.invoke(main, [
-            "scan-copy",
-            str(sample_pdf),
-            "-o", str(output_grayscale),
-            "--color-mode", "grayscale",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "scan-copy",
+                str(sample_pdf),
+                "-o",
+                str(output_grayscale),
+                "--color-mode",
+                "grayscale",
+            ],
+        )
         assert result.exit_code == 0
         assert output_grayscale.exists()
 
         # Test black & white
-        result = runner.invoke(main, [
-            "scan-copy",
-            str(sample_pdf),
-            "-o", str(output_bw),
-            "--color-mode", "bw",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "scan-copy",
+                str(sample_pdf),
+                "-o",
+                str(output_bw),
+                "--color-mode",
+                "bw",
+            ],
+        )
         assert result.exit_code == 0
         assert output_bw.exists()
 
@@ -547,12 +666,16 @@ class TestScanCopyCommand:
         """Test scan-copy with quiet flag."""
         output_path = temp_dir / "scanned.pdf"
 
-        result = runner.invoke(main, [
-            "scan-copy",
-            str(sample_pdf),
-            "-o", str(output_path),
-            "--quiet",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "scan-copy",
+                str(sample_pdf),
+                "-o",
+                str(output_path),
+                "--quiet",
+            ],
+        )
 
         assert result.exit_code == 0
         assert output_path.exists()
@@ -561,10 +684,13 @@ class TestScanCopyCommand:
 
     def test_scan_copy_nonexistent_file(self, runner):
         """Test scan-copy with nonexistent file."""
-        result = runner.invoke(main, [
-            "scan-copy",
-            "/nonexistent/file.pdf",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "scan-copy",
+                "/nonexistent/file.pdf",
+            ],
+        )
 
         assert result.exit_code != 0
 
@@ -572,11 +698,15 @@ class TestScanCopyCommand:
         """Test that scan-copy shows file size comparison."""
         output_path = temp_dir / "scanned.pdf"
 
-        result = runner.invoke(main, [
-            "scan-copy",
-            str(sample_pdf),
-            "-o", str(output_path),
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "scan-copy",
+                str(sample_pdf),
+                "-o",
+                str(output_path),
+            ],
+        )
 
         assert result.exit_code == 0
         assert "Original:" in result.output
@@ -587,12 +717,17 @@ class TestScanCopyCommand:
         """Test scan-copy with quality option."""
         output_path = temp_dir / "scanned.pdf"
 
-        result = runner.invoke(main, [
-            "scan-copy",
-            str(sample_pdf),
-            "-o", str(output_path),
-            "--quality", "70",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "scan-copy",
+                str(sample_pdf),
+                "-o",
+                str(output_path),
+                "--quality",
+                "70",
+            ],
+        )
 
         assert result.exit_code == 0
         assert output_path.exists()
@@ -603,21 +738,31 @@ class TestScanCopyCommand:
         output_low = temp_dir / "low_quality.pdf"
 
         # High quality
-        result = runner.invoke(main, [
-            "scan-copy",
-            str(sample_pdf),
-            "-o", str(output_high),
-            "--quality", "95",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "scan-copy",
+                str(sample_pdf),
+                "-o",
+                str(output_high),
+                "--quality",
+                "95",
+            ],
+        )
         assert result.exit_code == 0
 
         # Low quality
-        result = runner.invoke(main, [
-            "scan-copy",
-            str(sample_pdf),
-            "-o", str(output_low),
-            "--quality", "50",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "scan-copy",
+                str(sample_pdf),
+                "-o",
+                str(output_low),
+                "--quality",
+                "50",
+            ],
+        )
         assert result.exit_code == 0
 
         # Lower quality should produce smaller file
@@ -628,21 +773,31 @@ class TestScanCopyCommand:
         output_path = temp_dir / "scanned.pdf"
 
         # Quality too low (0)
-        result = runner.invoke(main, [
-            "scan-copy",
-            str(sample_pdf),
-            "-o", str(output_path),
-            "--quality", "0",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "scan-copy",
+                str(sample_pdf),
+                "-o",
+                str(output_path),
+                "--quality",
+                "0",
+            ],
+        )
         assert result.exit_code != 0
 
         # Quality too high (101)
-        result = runner.invoke(main, [
-            "scan-copy",
-            str(sample_pdf),
-            "-o", str(output_path),
-            "--quality", "101",
-        ])
+        result = runner.invoke(
+            main,
+            [
+                "scan-copy",
+                str(sample_pdf),
+                "-o",
+                str(output_path),
+                "--quality",
+                "101",
+            ],
+        )
         assert result.exit_code != 0
 
 

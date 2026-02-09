@@ -1,6 +1,5 @@
 """Integration tests for LegacyLipi end-to-end workflows."""
 
-import tempfile
 from pathlib import Path
 
 import fitz
@@ -83,11 +82,14 @@ class TestFullPipeline:
         """Test processing a multi-page PDF."""
         # Create test PDF
         pdf_path = test_pdf_dir / "multipage.pdf"
-        create_multipage_pdf(pdf_path, [
-            "Page 1: Introduction",
-            "Page 2: Content",
-            "Page 3: Conclusion",
-        ])
+        create_multipage_pdf(
+            pdf_path,
+            [
+                "Page 1: Introduction",
+                "Page 2: Content",
+                "Page 3: Conclusion",
+            ],
+        )
 
         # Process
         document = parse_pdf(pdf_path)
@@ -175,10 +177,13 @@ class TestEncodingDetectionPipeline:
     def test_mixed_content_detection(self, test_pdf_dir):
         """Test detection with mixed content types."""
         pdf_path = test_pdf_dir / "mixed.pdf"
-        create_multipage_pdf(pdf_path, [
-            "English text on page 1",
-            "More English on page 2",
-        ])
+        create_multipage_pdf(
+            pdf_path,
+            [
+                "English text on page 1",
+                "More English on page 2",
+            ],
+        )
 
         document = parse_pdf(pdf_path)
         detector = EncodingDetector()
@@ -249,6 +254,7 @@ class TestTranslationPipeline:
 
         # Verify backend type is recorded
         from legacylipi.core.models import TranslationBackend
+
         assert mock_result.translation_backend == TranslationBackend.MOCK
 
 
@@ -382,9 +388,7 @@ class TestRealPDFWithLegacyEncoding:
 
         # Look for common Marathi words that should appear after conversion
         # "महाराष्ट्र" (Maharashtra) is a key word that should appear
-        has_devanagari = any(
-            '\u0900' <= char <= '\u097F' for char in unicode_text
-        )
+        has_devanagari = any("\u0900" <= char <= "\u097f" for char in unicode_text)
         assert has_devanagari, "Converted text should contain Devanagari characters"
 
     def test_dvbtt_pdf_maharashtra_conversion(self, input_pdf_path):
@@ -407,10 +411,12 @@ class TestRealPDFWithLegacyEncoding:
         # After conversion, we should not see the garbled legacy-encoded form
         # (though it might still appear on Unicode pages that weren't converted)
         # The key test is that Devanagari content exists
-        devanagari_count = sum(1 for c in unicode_text if '\u0900' <= c <= '\u097F')
+        devanagari_count = sum(1 for c in unicode_text if "\u0900" <= c <= "\u097f")
 
         # Should have significant Devanagari content
-        assert devanagari_count > 100, f"Expected significant Devanagari content, got {devanagari_count} chars"
+        assert devanagari_count > 100, (
+            f"Expected significant Devanagari content, got {devanagari_count} chars"
+        )
 
     def test_dvbtt_mixed_encoding_handling(self, input_pdf_path):
         """Test that mixed encoding PDFs are handled correctly per-page."""
@@ -456,7 +462,7 @@ class TestRealPDFWithLegacyEncoding:
         content = output_path.read_text(encoding="utf-8")
 
         # Should have Devanagari content
-        devanagari_count = sum(1 for c in content if '\u0900' <= c <= '\u097F')
+        devanagari_count = sum(1 for c in content if "\u0900" <= c <= "\u097f")
         assert devanagari_count > 50, "Output should contain Devanagari text"
 
 
@@ -478,9 +484,7 @@ class TestRoundTrip:
         converted_doc = converter.convert_document(document, page_encodings=page_encodings)
 
         translator = create_translator("mock")
-        translation_result = translator.translate(
-            converted_doc.unicode_text, "en", "hi"
-        )
+        translation_result = translator.translate(converted_doc.unicode_text, "en", "hi")
 
         generator = OutputGenerator()
         output_path = test_pdf_dir / "roundtrip_output.txt"
@@ -512,9 +516,7 @@ class TestRoundTrip:
         converted_doc = converter.convert_document(document, page_encodings=page_encodings)
 
         translator = create_translator("mock")
-        translation_result = translator.translate(
-            converted_doc.unicode_text, "en", "hi"
-        )
+        translation_result = translator.translate(converted_doc.unicode_text, "en", "hi")
 
         generator = OutputGenerator()
         output_path = test_pdf_dir / "roundtrip_output.md"
