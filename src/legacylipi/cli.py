@@ -1058,15 +1058,7 @@ def list_encodings(search: str | None):
 @click.option("--host", default="0.0.0.0", help="Host to bind to.")
 def api(port: int, host: str):
     """Launch the LegacyLipi REST API + React frontend."""
-    try:
-        from legacylipi.api.main import _check_deps, serve
-
-        _check_deps()
-    except ImportError as e:
-        raise click.ClickException(
-            f"API dependencies not installed: {e}\n"
-            "Install with: pip install 'legacylipi[api]' or uv pip install 'legacylipi[api]'"
-        ) from None
+    from legacylipi.api.main import serve
 
     print_banner()
     console.print(f"[bold green]Starting API server on http://{host}:{port}[/bold green]")

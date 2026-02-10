@@ -31,6 +31,9 @@ dependencies = [
     "tenacity>=8.2.0",
     "deep-translator>=1.11.4",
     "pypdfium2>=5.3.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]
@@ -38,13 +41,8 @@ ocr = [
     "pytesseract>=0.3.13",
     "pillow>=12.1.0",
 ]
-api = [
-    "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.30.0",
-    "python-multipart>=0.0.9",
-]
 all = [
-    "legacylipi[ocr,api]",
+    "legacylipi[ocr]",
 ]
 dev = [
     "pytest>=7.4.0",

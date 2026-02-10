@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from legacylipi.api.deps import set_session_manager
-from legacylipi.api.main import create_app
+from legacylipi.api.main import app
 from legacylipi.api.session_manager import SessionManager
 
 
@@ -19,7 +19,6 @@ def _setup_session_manager():
 
 @pytest.fixture
 def client():
-    app = create_app()
     return TestClient(app)
 
 

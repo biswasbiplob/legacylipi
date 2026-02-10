@@ -1,8 +1,7 @@
-"""Tests for optional dependency import guards.
+"""Tests for dependency installation and entry points.
 
-Verifies that commands depending on optional extras (api, ocr) give clear
-error messages instead of raw ImportError tracebacks when the extras are
-not installed.
+Verifies that all commands work out of the box after a bare
+`pip install legacylipi` / `uv tool install legacylipi`.
 """
 
 import subprocess
@@ -20,87 +19,40 @@ def runner():
     return CliRunner()
 
 
-class TestApiImportGuard:
-    """Verify the API module handles missing dependencies gracefully."""
+class TestCoreDepsAvailable:
+    """Verify that API deps are always available (core dependencies)."""
 
-    def test_api_main_importable_without_crash(self):
-        """api.main can be imported even when deps are present (smoke test)."""
-        from legacylipi.api.main import create_app
+    def test_fastapi_importable(self):
+        """fastapi is a core dependency and always importable."""
+        import fastapi
 
-        app = create_app()
+        assert fastapi is not None
+
+    def test_uvicorn_importable(self):
+        """uvicorn is a core dependency and always importable."""
+        import uvicorn
+
+        assert uvicorn is not None
+
+    def test_api_main_importable(self):
+        """api.main imports without errors."""
+        from legacylipi.api.main import app, serve
+
         assert app is not None
-
-    def test_create_app_returns_fastapi_instance(self):
-        """create_app() returns a working FastAPI app."""
-        from legacylipi.api.main import create_app
-
-        app = create_app()
-        assert app.title == "LegacyLipi API"
-
-    def test_serve_function_exists(self):
-        """serve() entry point is importable."""
-        from legacylipi.api.main import serve
-
         assert callable(serve)
 
-    def test_cli_api_command_help(self, runner):
-        """CLI 'api' command shows help without errors."""
-        result = runner.invoke(main, ["api", "--help"])
-        assert result.exit_code == 0
-        assert "--port" in result.output
-        assert "--host" in result.output
+    def test_app_is_fastapi_instance(self):
+        """Module-level app is a FastAPI instance."""
+        from legacylipi.api.main import app
 
-    def test_missing_api_deps_gives_clear_error(self):
-        """When fastapi/uvicorn are missing, importing main still works
-        but serve() raises a clear ImportError."""
-        code = textwrap.dedent("""\
-            import importlib.abc
-            import importlib.machinery
-            import sys
-
-            # Install import blocker BEFORE any legacylipi imports
-            class ImportBlocker(importlib.abc.MetaPathFinder):
-                blocked = {'fastapi', 'uvicorn', 'starlette'}
-                def find_spec(self, fullname, path, target=None):
-                    if fullname.split('.')[0] in self.blocked:
-                        raise ImportError(f"No module named '{fullname}'")
-                    return None
-
-            # Remove any cached modules first
-            for mod in list(sys.modules):
-                if mod.split('.')[0] in ('fastapi', 'uvicorn', 'starlette'):
-                    del sys.modules[mod]
-
-            sys.meta_path.insert(0, ImportBlocker())
-
-            from legacylipi.api.main import serve, _check_deps
-            try:
-                _check_deps()
-                print("ERROR: should have raised ImportError")
-                sys.exit(1)
-            except ImportError as e:
-                msg = str(e)
-                if "legacylipi[api]" not in msg:
-                    print(f"ERROR: message missing install hint: {msg}")
-                    sys.exit(1)
-                print("OK: clear error message")
-                sys.exit(0)
-        """)
-        result = subprocess.run(
-            [sys.executable, "-c", code],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        assert result.returncode == 0, f"stdout: {result.stdout}\nstderr: {result.stderr}"
-        assert "OK" in result.stdout
+        assert app.title == "LegacyLipi API"
 
 
-class TestEntryPointInstallation:
-    """Verify that entry points work correctly when package is installed."""
+class TestEntryPoints:
+    """Verify all entry points work in a subprocess (simulates fresh install)."""
 
-    def test_legacylipi_cli_entry_point(self):
-        """The main CLI entry point works."""
+    def test_legacylipi_cli_help(self):
+        """legacylipi --help works."""
         result = subprocess.run(
             [sys.executable, "-m", "legacylipi.cli", "--help"],
             capture_output=True,
@@ -110,7 +62,19 @@ class TestEntryPointInstallation:
         assert result.returncode == 0
         assert "LegacyLipi" in result.stdout
 
-    def test_legacylipi_web_entry_point_importable(self):
+    def test_legacylipi_api_help(self):
+        """legacylipi api --help works without import errors."""
+        result = subprocess.run(
+            [sys.executable, "-m", "legacylipi.cli", "api", "--help"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert result.returncode == 0
+        assert "--port" in result.stdout
+        assert "--host" in result.stdout
+
+    def test_legacylipi_web_importable(self):
         """legacylipi-web entry point (serve) is importable."""
         code = "from legacylipi.api.main import serve; print('OK')"
         result = subprocess.run(
@@ -122,14 +86,12 @@ class TestEntryPointInstallation:
         assert result.returncode == 0
         assert "OK" in result.stdout
 
-    def test_no_nicegui_dependency(self):
-        """NiceGUI should NOT be importable (removed dependency)."""
+    def test_api_main_no_import_error_subprocess(self):
+        """api.main loads cleanly in a fresh subprocess."""
         code = textwrap.dedent("""\
-            try:
-                import nicegui
-                print("INSTALLED")
-            except ImportError:
-                print("NOT_INSTALLED")
+            from legacylipi.api.main import app
+            assert app is not None
+            print("OK")
         """)
         result = subprocess.run(
             [sys.executable, "-c", code],
@@ -137,12 +99,15 @@ class TestEntryPointInstallation:
             text=True,
             timeout=10,
         )
-        # nicegui may or may not be installed in dev env, but it should
-        # not be required — this is informational
-        assert result.returncode == 0
+        assert result.returncode == 0, f"stderr: {result.stderr}"
+        assert "OK" in result.stdout
+
+
+class TestRemovedNiceGUI:
+    """Verify the deprecated NiceGUI UI is fully removed."""
 
     def test_ui_module_removed(self):
-        """The legacylipi.ui module should no longer exist."""
+        """The legacylipi.ui module no longer exists."""
         code = textwrap.dedent("""\
             try:
                 from legacylipi.ui.app import main
@@ -159,12 +124,19 @@ class TestEntryPointInstallation:
         assert result.returncode == 0
         assert "REMOVED" in result.stdout
 
-
-class TestDeprecatedUICommand:
-    """Verify the deprecated UI command gives clear guidance."""
-
-    def test_ui_command_shows_api_alternative(self, runner):
+    def test_ui_command_shows_deprecation(self, runner):
         """'legacylipi ui' tells users to use 'legacylipi api'."""
         result = runner.invoke(main, ["ui"])
         assert result.exit_code != 0
         assert "legacylipi api" in result.output
+
+
+class TestCLIApiCommand:
+    """Verify the CLI api command works correctly."""
+
+    def test_api_help(self, runner):
+        """CLI 'api' command shows help."""
+        result = runner.invoke(main, ["api", "--help"])
+        assert result.exit_code == 0
+        assert "--port" in result.output
+        assert "--host" in result.output
