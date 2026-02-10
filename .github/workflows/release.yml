@@ -3,6 +3,12 @@ name: Release
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (skip release creation and PyPI publish)"
+        type: boolean
+        default: true
 
 jobs:
   release:
@@ -172,8 +178,15 @@ jobs:
           \`\`\`
           EOF
 
+      - name: Preview release notes (dry run)
+        if: steps.check_release.outputs.exists == 'false' && inputs.dry_run == true
+        run: |
+          echo "::notice::DRY RUN — skipping release creation and PyPI publish"
+          echo "--- Generated release notes ---"
+          cat release_notes.md
+
       - name: Create GitHub Release
-        if: steps.check_release.outputs.exists == 'false'
+        if: steps.check_release.outputs.exists == 'false' && inputs.dry_run != true
         run: |
           gh release create "${{ steps.version.outputs.tag }}" \
             dist/legacylipi-${{ steps.version.outputs.version }}-py3-none-any.whl \
@@ -184,7 +197,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to PyPI
-        if: steps.check_release.outputs.exists == 'false'
+        if: steps.check_release.outputs.exists == 'false' && inputs.dry_run != true
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
