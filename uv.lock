@@ -678,8 +678,10 @@ dependencies = [
     { name = "deep-translator" },
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "pillow" },
     { name = "pymupdf" },
     { name = "pypdfium2" },
+    { name = "pytesseract" },
     { name = "python-multipart" },
     { name = "pyyaml" },
     { name = "rich" },
@@ -688,10 +690,6 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-all = [
-    { name = "pillow" },
-    { name = "pytesseract" },
-]
 dev = [
     { name = "mypy" },
     { name = "pytest" },
@@ -704,10 +702,6 @@ easyocr = [
 ]
 google = [
     { name = "google-cloud-translate" },
-]
-ocr = [
-    { name = "pillow" },
-    { name = "pytesseract" },
 ]
 ollama = [
     { name = "ollama" },
@@ -728,14 +722,13 @@ requires-dist = [
     { name = "google-cloud-translate", marker = "extra == 'google'", specifier = ">=3.12.0" },
     { name = "google-cloud-vision", marker = "extra == 'vision'", specifier = ">=3.5.0" },
     { name = "httpx", specifier = ">=0.25.0" },
-    { name = "legacylipi", extras = ["ocr"], marker = "extra == 'all'" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.5.0" },
     { name = "ollama", marker = "extra == 'ollama'", specifier = ">=0.1.0" },
     { name = "openai", marker = "extra == 'openai'", specifier = ">=1.0.0" },
-    { name = "pillow", marker = "extra == 'ocr'", specifier = ">=12.1.0" },
+    { name = "pillow", specifier = ">=12.1.0" },
     { name = "pymupdf", specifier = ">=1.23.0" },
     { name = "pypdfium2", specifier = ">=5.3.0" },
-    { name = "pytesseract", marker = "extra == 'ocr'", specifier = ">=0.3.13" },
+    { name = "pytesseract", specifier = ">=0.3.13" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.4.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
@@ -746,7 +739,7 @@ requires-dist = [
     { name = "tenacity", specifier = ">=8.2.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30.0" },
 ]
-provides-extras = ["ocr", "all", "dev", "ollama", "google", "openai", "vision", "easyocr"]
+provides-extras = ["dev", "ollama", "google", "openai", "vision", "easyocr"]
 
 [[package]]
 name = "librt"
