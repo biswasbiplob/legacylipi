@@ -671,11 +671,12 @@ wheels = [
 
 [[package]]
 name = "legacylipi"
-version = "1.0.0"
+version = "1.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
     { name = "deep-translator" },
+    { name = "easyocr" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "pillow" },
@@ -697,9 +698,6 @@ dev = [
     { name = "pytest-cov" },
     { name = "ruff" },
 ]
-easyocr = [
-    { name = "easyocr" },
-]
 google = [
     { name = "google-cloud-translate" },
 ]
@@ -717,7 +715,7 @@ vision = [
 requires-dist = [
     { name = "click", specifier = ">=8.1.0" },
     { name = "deep-translator", specifier = ">=1.11.4" },
-    { name = "easyocr", marker = "extra == 'easyocr'", specifier = ">=1.7.0" },
+    { name = "easyocr", specifier = ">=1.7.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "google-cloud-translate", marker = "extra == 'google'", specifier = ">=3.12.0" },
     { name = "google-cloud-vision", marker = "extra == 'vision'", specifier = ">=3.5.0" },
@@ -739,7 +737,7 @@ requires-dist = [
     { name = "tenacity", specifier = ">=8.2.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30.0" },
 ]
-provides-extras = ["dev", "ollama", "google", "openai", "vision", "easyocr"]
+provides-extras = ["dev", "ollama", "google", "openai", "vision"]
 
 [[package]]
 name = "librt"
