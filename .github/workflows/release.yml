@@ -50,32 +50,47 @@ jobs:
 
       - name: Generate release notes
         if: steps.check_release.outputs.exists == 'false'
-        id: release_notes
         run: |
-          # Get commits since last tag
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          VERSION="${{ steps.version.outputs.version }}"
 
-          if [ -n "$LAST_TAG" ]; then
-            COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s" --no-merges)
+          # Use curated RELEASE_NOTES.md if it exists, otherwise auto-generate
+          if [ -f "RELEASE_NOTES.md" ]; then
+            echo "Using curated RELEASE_NOTES.md"
+            cp RELEASE_NOTES.md release_notes.md
           else
-            COMMITS=$(git log -20 --pretty=format:"- %s" --no-merges)
-          fi
+            echo "Auto-generating release notes from commits"
+            LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
 
-          # Create release notes
-          cat << EOF > release_notes.md
-          ## LegacyLipi v${{ steps.version.outputs.version }}
+            if [ -n "$LAST_TAG" ]; then
+              COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s" --no-merges)
+            else
+              COMMITS=$(git log -20 --pretty=format:"- %s" --no-merges)
+            fi
+
+            cat > release_notes.md << EOF
+          ## LegacyLipi v${VERSION}
 
           ### Changes
           ${COMMITS}
+          EOF
+          fi
+
+          # Append installation instructions
+          cat >> release_notes.md << EOF
+
+          ---
 
           ### Installation
-          \`\`\`bash
-          pip install legacylipi-${{ steps.version.outputs.version }}-py3-none-any.whl
-          \`\`\`
 
-          Or install from PyPI:
           \`\`\`bash
-          pip install legacylipi==${{ steps.version.outputs.version }}
+          # Via pip
+          pip install legacylipi==${VERSION}
+
+          # Via uv
+          uv tool install legacylipi==${VERSION}
+
+          # Run without installing
+          uvx legacylipi api
           \`\`\`
           EOF
 
