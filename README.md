@@ -31,6 +31,28 @@ cd frontend
 npm install
 ```
 
+### Docker
+
+Build and run with Docker:
+
+```bash
+# Build the image
+docker build -t legacylipi .
+
+# Run with Docker
+docker run -p 8000:8000 legacylipi
+
+# Or use Docker Compose
+docker compose up
+```
+
+The web UI will be available at http://localhost:8000.
+
+To process local files, mount volumes:
+```bash
+docker run -p 8000:8000 -v ./input:/app/input -v ./output:/app/output legacylipi
+```
+
 ### Usage
 
 ```bash

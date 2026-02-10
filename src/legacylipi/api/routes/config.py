@@ -83,3 +83,18 @@ async def get_options():
         "workflow_modes": WORKFLOW_MODES,
         "ocr_engines": OCR_ENGINES,
     }
+
+
+@router.get("/source-languages")
+async def get_source_languages():
+    """Get available source languages with their encoding mappings."""
+    from legacylipi.core.language_utils import ENCODING_LANGUAGE_MAP
+
+    # Group encodings by language
+    languages: dict[str, list[str]] = {}
+    for encoding, lang in ENCODING_LANGUAGE_MAP.items():
+        if lang not in languages:
+            languages[lang] = []
+        languages[lang].append(encoding)
+
+    return {"languages": languages}

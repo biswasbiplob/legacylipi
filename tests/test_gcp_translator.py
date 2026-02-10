@@ -1,20 +1,17 @@
 """Tests for GCP Cloud Translation backend and usage tracking."""
 
-import json
-import tempfile
 from datetime import datetime
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from legacylipi.core.utils.usage_tracker import UsageTracker
+from legacylipi.core.models import TranslationBackend
 from legacylipi.core.translator import (
     GCPCloudTranslateBackend,
     UsageLimitExceededError,
     create_translator,
 )
-from legacylipi.core.models import TranslationBackend
+from legacylipi.core.utils.usage_tracker import UsageTracker
 
 
 class TestUsageTracker:

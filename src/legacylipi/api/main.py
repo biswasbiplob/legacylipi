@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from legacylipi import __version__
 from legacylipi.api.deps import set_session_manager
 from legacylipi.api.routes import config, download, processing, progress, sessions
 from legacylipi.api.schemas import HealthResponse
@@ -36,7 +37,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="LegacyLipi API",
     description="REST API for translating PDFs with legacy Indian font encodings",
-    version="0.8.0",
+    version=__version__,
     lifespan=lifespan,
 )
 
@@ -59,11 +60,14 @@ app.include_router(download.router, prefix="/api/v1")
 
 @app.get("/api/v1/health", response_model=HealthResponse)
 async def health():
-    return HealthResponse(status="ok", version="0.8.0")
+    return HealthResponse(status="ok", version=__version__)
 
 
-# Serve frontend static files in production
-_frontend_dist = Path(__file__).parent.parent.parent.parent / "frontend" / "dist"
+# Serve frontend static files in production.
+# Check two locations: bundled inside the package (installed), or in the project tree (dev).
+_pkg_static = Path(__file__).parent / "static"
+_project_static = Path(__file__).parent.parent.parent.parent / "frontend" / "dist"
+_frontend_dist = _pkg_static if _pkg_static.exists() else _project_static
 if _frontend_dist.exists():
     app.mount("/", StaticFiles(directory=str(_frontend_dist), html=True), name="frontend")
 

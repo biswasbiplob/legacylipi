@@ -1,6 +1,5 @@
 """Tests for Translation Engine module."""
 
-import asyncio
 import shutil
 
 import pytest
@@ -20,8 +19,8 @@ from legacylipi.core.translator import (
 )
 from legacylipi.core.utils.language_codes import (
     get_google_code,
-    get_mymemory_code,
     get_language_name,
+    get_mymemory_code,
 )
 
 
@@ -484,6 +483,7 @@ class TestOpenAITranslationBackend:
     def test_missing_api_key_raises_error(self):
         """Test that missing API key raises TranslationError."""
         import os
+
         from legacylipi.core.translator import OpenAITranslationBackend
 
         # Temporarily remove env var if set
@@ -498,6 +498,7 @@ class TestOpenAITranslationBackend:
     def test_reads_api_key_from_env(self):
         """Test that API key is read from environment variable."""
         import os
+
         from legacylipi.core.translator import OpenAITranslationBackend
 
         original_key = os.environ.get("OPENAI_API_KEY")

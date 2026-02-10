@@ -45,9 +45,11 @@ export function useProcessing() {
         case 'translate': {
           const config: TranslateRequest = {
             target_lang: state.targetLang,
+            ...(state.sourceLang && { source_lang: state.sourceLang }),
             output_format: state.outputFormat,
             translation_mode: state.translationMode,
             translator: state.translator,
+            bilingual: state.bilingual,
             use_ocr: state.useOcr,
             ocr_engine: state.ocrEngine,
             ocr_lang: state.ocrLang,

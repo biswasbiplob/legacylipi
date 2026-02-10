@@ -1,15 +1,12 @@
 """Tests for mapping loader module."""
 
-import tempfile
-from pathlib import Path
-
 import pytest
 import yaml
 
 from legacylipi.mappings.loader import (
     BUILTIN_MAPPINGS,
-    MappingLoadError,
     MappingLoader,
+    MappingLoadError,
     MappingTable,
     get_mapping,
 )

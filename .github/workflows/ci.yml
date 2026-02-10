@@ -25,7 +25,7 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --extra dev --extra api --extra ocr
 
       - name: Run linting
         run: uv run ruff check src/
@@ -42,6 +42,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build frontend
+        run: cd frontend && npm ci && npm run build
+
+      - name: Bundle frontend into package
+        run: cp -r frontend/dist src/legacylipi/api/static
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4

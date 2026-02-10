@@ -13,6 +13,7 @@ import type {
   ConfigLanguages,
   ConfigTranslators,
   ConfigOptions,
+  ConfigSourceLanguages,
 } from '../lib/types';
 
 import {
@@ -61,10 +62,12 @@ export interface AppState {
   ocrDpi: number;
 
   // Translation settings
+  sourceLang: string;
   targetLang: string;
   outputFormat: 'pdf' | 'text' | 'markdown';
   translationMode: 'structure_preserving' | 'flowing';
   translator: string;
+  bilingual: boolean;
 
   // Backend-specific settings
   openaiKey: string;
@@ -79,6 +82,7 @@ export interface AppState {
     languages: ConfigLanguages | null;
     translators: ConfigTranslators | null;
     options: ConfigOptions | null;
+    sourceLanguages: ConfigSourceLanguages | null;
   };
 
   // Result
@@ -106,10 +110,12 @@ const initialState: AppState = {
   ocrLang: DEFAULT_OCR_LANG,
   ocrDpi: DEFAULT_OCR_DPI,
 
+  sourceLang: '',
   targetLang: DEFAULT_TARGET_LANG,
   outputFormat: DEFAULT_OUTPUT_FORMAT,
   translationMode: DEFAULT_TRANSLATION_MODE,
   translator: DEFAULT_TRANSLATOR,
+  bilingual: false,
 
   openaiKey: '',
   openaiModel: DEFAULT_OPENAI_MODEL,
@@ -122,6 +128,7 @@ const initialState: AppState = {
     languages: null,
     translators: null,
     options: null,
+    sourceLanguages: null,
   },
 
   resultFilename: null,
@@ -148,6 +155,7 @@ export type AppAction =
   | { type: 'SET_CONFIG_LANGUAGES'; payload: ConfigLanguages }
   | { type: 'SET_CONFIG_TRANSLATORS'; payload: ConfigTranslators }
   | { type: 'SET_CONFIG_OPTIONS'; payload: ConfigOptions }
+  | { type: 'SET_CONFIG_SOURCE_LANGUAGES'; payload: ConfigSourceLanguages }
   | {
       type: 'SET_RESULT';
       payload: { filename: string; fileSize: number };
@@ -210,10 +218,12 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ocrEngine,
         ocrLang,
         ocrDpi,
+        sourceLang,
         targetLang,
         outputFormat,
         translationMode,
         translator,
+        bilingual,
         openaiKey,
         openaiModel,
         ollamaModel,
@@ -231,10 +241,12 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...(ocrEngine !== undefined && { ocrEngine }),
         ...(ocrLang !== undefined && { ocrLang }),
         ...(ocrDpi !== undefined && { ocrDpi }),
+        ...(sourceLang !== undefined && { sourceLang }),
         ...(targetLang !== undefined && { targetLang }),
         ...(outputFormat !== undefined && { outputFormat }),
         ...(translationMode !== undefined && { translationMode }),
         ...(translator !== undefined && { translator }),
+        ...(bilingual !== undefined && { bilingual }),
         ...(openaiKey !== undefined && { openaiKey }),
         ...(openaiModel !== undefined && { openaiModel }),
         ...(ollamaModel !== undefined && { ollamaModel }),
@@ -260,6 +272,12 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         config: { ...state.config, options: action.payload },
+      };
+
+    case 'SET_CONFIG_SOURCE_LANGUAGES':
+      return {
+        ...state,
+        config: { ...state.config, sourceLanguages: action.payload },
       };
 
     case 'SET_RESULT':

@@ -243,6 +243,11 @@ async def run_translate(
             config.translation_mode == "structure_preserving" and config.output_format == "pdf"
         )
 
+        # Determine source language from encoding
+        from legacylipi.core.language_utils import get_source_language
+
+        source_lang = config.source_lang or get_source_language(encoding_result.detected_encoding)
+
         if use_structure_preserving:
             # Translate each block individually
             all_blocks = [
@@ -271,7 +276,7 @@ async def run_translate(
 
                 await engine.translate_blocks_async(
                     all_blocks,
-                    source_lang="mr",
+                    source_lang=source_lang,
                     target_lang=config.target_lang,
                     max_concurrent=3,
                     progress_callback=sync_progress,
@@ -280,18 +285,35 @@ async def run_translate(
                 use_structure_preserving = False
 
         if not use_structure_preserving:
-            # Flowing mode: combine text and translate as one string
-            text_parts = []
-            for i, page in enumerate(converted_doc.pages, 1):
-                page_text = page.unicode_text
-                text_parts.append(f"--- Page {i} ---\n{page_text}")
-            unicode_text = "\n\n".join(text_parts)
+            # Translate each page individually to avoid page marker corruption
+            page_texts = [page.unicode_text for page in converted_doc.pages]
 
-            translation_result = await loop.run_in_executor(
-                None,
-                lambda: engine.translate(
-                    unicode_text, source_lang="mr", target_lang=config.target_lang
-                ),
+            translated_pages = await engine.translate_pages_async(
+                page_texts,
+                source_lang=source_lang,
+                target_lang=config.target_lang,
+            )
+
+            # Reassemble with page markers for output generation
+            text_parts = []
+            for i, translated_page in enumerate(translated_pages, 1):
+                text_parts.append(f"--- Page {i} ---\n{translated_page}")
+            translated_text = "\n\n".join(text_parts)
+
+            unicode_text = "\n\n".join(
+                f"--- Page {i} ---\n{page.unicode_text}"
+                for i, page in enumerate(converted_doc.pages, 1)
+            )
+
+            from legacylipi.core.models import TranslationResult
+
+            translation_result = TranslationResult(
+                source_text=unicode_text,
+                translated_text=translated_text,
+                source_language=source_lang,
+                target_language=config.target_lang,
+                translation_backend=engine.backend_type,
+                chunk_count=len(translated_pages),
             )
 
         # Step 5: Generate output
@@ -306,26 +328,44 @@ async def run_translate(
 
         generator = OutputGenerator()
 
-        if use_structure_preserving and output_fmt == OutputFormat.PDF:
+        # Check if bilingual output requested
+        if config.bilingual and translation_result:
+            output_content = generator.generate_bilingual(
+                converted_doc, encoding_result, translation_result
+            )
+            if isinstance(output_content, bytes):
+                result_bytes = output_content
+            else:
+                result_bytes = output_content.encode("utf-8")
+            result_filename = f"{Path(filename).stem}_bilingual.md"
+        elif use_structure_preserving and output_fmt == OutputFormat.PDF:
             output_content = generator.generate_pdf(
                 converted_doc,
                 encoding_result,
                 translation_result=None,
                 structure_preserving_translation=True,
             )
+            if isinstance(output_content, bytes):
+                result_bytes = output_content
+            else:
+                result_bytes = output_content.encode("utf-8")
+
+            ext_map = {"pdf": ".pdf", "text": ".txt", "markdown": ".md"}
+            ext = ext_map.get(config.output_format, ".txt")
+            result_filename = f"{Path(filename).stem}_translated{ext}"
         else:
             output_content = generator.generate(
                 converted_doc, encoding_result, translation_result, output_fmt
             )
 
-        if isinstance(output_content, bytes):
-            result_bytes = output_content
-        else:
-            result_bytes = output_content.encode("utf-8")
+            if isinstance(output_content, bytes):
+                result_bytes = output_content
+            else:
+                result_bytes = output_content.encode("utf-8")
 
-        ext_map = {"pdf": ".pdf", "text": ".txt", "markdown": ".md"}
-        ext = ext_map.get(config.output_format, ".txt")
-        result_filename = f"{Path(filename).stem}_translated{ext}"
+            ext_map = {"pdf": ".pdf", "text": ".txt", "markdown": ".md"}
+            ext = ext_map.get(config.output_format, ".txt")
+            result_filename = f"{Path(filename).stem}_translated{ext}"
 
         await _report(progress_callback, 100, "complete", "Translation complete!")
         return result_bytes, result_filename

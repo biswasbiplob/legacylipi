@@ -1,6 +1,5 @@
 """Tests for OCR Parser module."""
 
-import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -8,7 +7,6 @@ import fitz  # PyMuPDF
 import pytest
 
 from legacylipi.core.ocr_parser import (
-    PYTESSERACT_AVAILABLE,
     OCRError,
     OCRParser,
     TesseractNotFoundError,
@@ -111,7 +109,9 @@ class TestOCRParserInit:
         create_test_pdf(pdf_path, ["Test"])
 
         # Test normalization mapping
-        with patch("legacylipi.core.ocr_parser.check_tesseract_available", return_value=(True, "OK")):
+        with patch(
+            "legacylipi.core.ocr_parser.check_tesseract_available", return_value=(True, "OK")
+        ):
             parser = OCRParser(pdf_path, lang="marathi")
             assert parser.lang == "mar"
 
@@ -131,7 +131,9 @@ class TestOCRParserMocked:
     @pytest.fixture
     def mock_tesseract_available(self):
         """Mock Tesseract as available."""
-        with patch("legacylipi.core.ocr_parser.check_tesseract_available", return_value=(True, "OK")):
+        with patch(
+            "legacylipi.core.ocr_parser.check_tesseract_available", return_value=(True, "OK")
+        ):
             yield
 
     @pytest.fixture
@@ -169,10 +171,7 @@ class TestOCRParserMocked:
 
 
 # Integration tests that require Tesseract to be installed
-@pytest.mark.skipif(
-    not check_tesseract_available()[0],
-    reason="Tesseract OCR not installed"
-)
+@pytest.mark.skipif(not check_tesseract_available()[0], reason="Tesseract OCR not installed")
 class TestOCRParserIntegration:
     """Integration tests for OCRParser (requires Tesseract)."""
 
@@ -197,8 +196,7 @@ class TestOCRParserIntegration:
                 parser.render_page_to_image(10)
 
     @pytest.mark.skipif(
-        not check_language_available("eng"),
-        reason="English language pack not installed"
+        not check_language_available("eng"), reason="English language pack not installed"
     )
     def test_ocr_page_basic(self, temp_dir):
         """Test basic OCR on a page."""
@@ -212,8 +210,7 @@ class TestOCRParserIntegration:
             assert isinstance(word_data, list)
 
     @pytest.mark.skipif(
-        not check_language_available("eng"),
-        reason="English language pack not installed"
+        not check_language_available("eng"), reason="English language pack not installed"
     )
     def test_parse_page(self, temp_dir):
         """Test parsing a single page with OCR."""
@@ -227,8 +224,7 @@ class TestOCRParserIntegration:
             assert page.height > 0
 
     @pytest.mark.skipif(
-        not check_language_available("eng"),
-        reason="English language pack not installed"
+        not check_language_available("eng"), reason="English language pack not installed"
     )
     def test_parse_full_document(self, temp_dir):
         """Test parsing full document with OCR."""
@@ -241,8 +237,7 @@ class TestOCRParserIntegration:
             assert len(doc.pages) == 2
 
     @pytest.mark.skipif(
-        not check_language_available("eng"),
-        reason="English language pack not installed"
+        not check_language_available("eng"), reason="English language pack not installed"
     )
     def test_parse_pdf_with_ocr_convenience_function(self, temp_dir):
         """Test the convenience function."""
@@ -253,8 +248,7 @@ class TestOCRParserIntegration:
         assert doc.page_count == 1
 
     @pytest.mark.skipif(
-        not check_language_available("eng"),
-        reason="English language pack not installed"
+        not check_language_available("eng"), reason="English language pack not installed"
     )
     def test_ocr_output_is_unicode(self, temp_dir):
         """Test that OCR output is already Unicode."""
@@ -272,7 +266,7 @@ class TestOCRParserIntegration:
 
 @pytest.mark.skipif(
     not check_tesseract_available()[0] or not check_language_available("mar"),
-    reason="Tesseract OCR or Marathi language not installed"
+    reason="Tesseract OCR or Marathi language not installed",
 )
 class TestOCRParserMarathi:
     """Integration tests for Marathi OCR."""
@@ -352,7 +346,6 @@ class TestGPUDetection:
     def test_detect_gpu_backend_no_torch(self):
         """Test detection when PyTorch is not available."""
         # Need to reimport after patching
-        import importlib
         import legacylipi.core.ocr_parser as ocr_module
 
         # Force reimport by clearing from cache
@@ -384,6 +377,7 @@ class TestGPUDetection:
                 # Directly test the logic
                 try:
                     import torch
+
                     if torch.cuda.is_available():
                         result = (True, "cuda")
                     else:

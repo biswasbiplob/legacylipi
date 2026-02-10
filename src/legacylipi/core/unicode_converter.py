@@ -215,10 +215,10 @@ class UnicodeConverter:
         final_result = "".join(new_result)
 
         # Apply encoding-specific post-processing
-        if mapping.encoding_name.lower() in ("shree-dev", "shree-dev-0714", "shree-dev-0708"):
-            from legacylipi.mappings.shree_dev import apply_shree_dev_post_processing
+        from legacylipi.core.post_processor import get_post_processor
 
-            final_result = apply_shree_dev_post_processing(final_result)
+        post_processor = get_post_processor(mapping.encoding_name)
+        final_result = post_processor.process(final_result)
 
         return final_result, unmapped
 

@@ -1361,6 +1361,57 @@ class TranslationEngine:
             )
         )
 
+    async def translate_pages_async(
+        self,
+        page_texts: list[str],
+        source_lang: str | None = None,
+        target_lang: str | None = None,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> list[str]:
+        """Translate a list of page texts individually.
+
+        Each page is translated as a separate request, avoiding page marker
+        corruption that occurs when translating concatenated text.
+
+        Args:
+            page_texts: List of text strings, one per page.
+            source_lang: Source language code.
+            target_lang: Target language code.
+            progress_callback: Optional callback(completed, total).
+
+        Returns:
+            List of translated page texts.
+        """
+        source = source_lang or self._config.source_language
+        target = target_lang or self._config.target_language
+
+        translated_pages = []
+        total = len(page_texts)
+
+        for i, page_text in enumerate(page_texts):
+            if not page_text.strip():
+                translated_pages.append(page_text)
+            else:
+                result = await self.translate_async(page_text, source, target)
+                translated_pages.append(result.translated_text)
+
+            if progress_callback:
+                progress_callback(i + 1, total)
+
+        return translated_pages
+
+    def translate_pages(
+        self,
+        page_texts: list[str],
+        source_lang: str | None = None,
+        target_lang: str | None = None,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> list[str]:
+        """Translate pages synchronously."""
+        return asyncio.run(
+            self.translate_pages_async(page_texts, source_lang, target_lang, progress_callback)
+        )
+
     def translate(
         self,
         text: str,
