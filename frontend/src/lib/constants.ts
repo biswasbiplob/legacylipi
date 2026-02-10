@@ -1,0 +1,14 @@
+export const DEFAULT_DPI = 300;
+export const DEFAULT_QUALITY = 85;
+export const DEFAULT_COLOR_MODE = 'color' as const;
+export const DEFAULT_OCR_ENGINE = 'easyocr' as const;
+export const DEFAULT_OCR_LANG = 'mar';
+export const DEFAULT_OCR_DPI = 300;
+export const DEFAULT_OUTPUT_FORMAT = 'pdf' as const;
+export const DEFAULT_TRANSLATION_MODE = 'structure_preserving' as const;
+export const DEFAULT_TARGET_LANG = 'en';
+export const DEFAULT_TRANSLATOR = 'trans';
+export const DEFAULT_OPENAI_MODEL = 'gpt-4o-mini';
+export const DEFAULT_OLLAMA_MODEL = 'llama3.2';
+export const DEFAULT_OLLAMA_HOST = 'http://localhost:11434';
+export const MAX_FILE_SIZE = 50 * 1024 * 1024;
