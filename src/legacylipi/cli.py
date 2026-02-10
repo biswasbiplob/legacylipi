@@ -67,17 +67,13 @@ def main():
     pass
 
 
-@main.command()
-@click.option("--port", default=8080, type=int, help="Port to run the web UI on.")
-@click.option("--host", default="0.0.0.0", help="Host to bind to.")
-@click.option("--no-browser", is_flag=True, help="Don't open browser automatically.")
-def ui(port: int, host: str, no_browser: bool):
-    """Launch the LegacyLipi web interface."""
-    from legacylipi.ui.app import run_ui
-
-    print_banner()
-    console.print(f"[bold green]Starting web UI on http://{host}:{port}[/bold green]")
-    run_ui(port=port, host=host, show=not no_browser)
+@main.command(deprecated=True)
+def ui():
+    """[Removed] Use 'legacylipi api' instead."""
+    raise click.ClickException(
+        "The NiceGUI-based 'ui' command has been removed.\n"
+        "Use 'legacylipi api' to launch the new React web interface."
+    )
 
 
 @main.command()
@@ -1062,7 +1058,13 @@ def list_encodings(search: str | None):
 @click.option("--host", default="0.0.0.0", help="Host to bind to.")
 def api(port: int, host: str):
     """Launch the LegacyLipi REST API + React frontend."""
-    from legacylipi.api.main import serve
+    try:
+        from legacylipi.api.main import serve
+    except ImportError as e:
+        raise click.ClickException(
+            f"API dependencies not installed: {e}\n"
+            "Install with: pip install 'legacylipi[api]' or uv pip install 'legacylipi[api]'"
+        ) from None
 
     print_banner()
     console.print(f"[bold green]Starting API server on http://{host}:{port}[/bold green]")
