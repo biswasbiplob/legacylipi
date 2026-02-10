@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "legacylipi"
-version = "1.0.0"
+version = "1.0.1"
 description = "Legacy Font PDF Translator - Translate PDFs with legacy Indian font encodings to English"
 readme = "README.md"
 license = "MIT"
@@ -36,6 +36,7 @@ dependencies = [
     "python-multipart>=0.0.9",
     "pytesseract>=0.3.13",
     "pillow>=12.1.0",
+    "easyocr>=1.7.0",
 ]
 
 [project.optional-dependencies]
@@ -57,9 +58,6 @@ openai = [
 ]
 vision = [
     "google-cloud-vision>=3.5.0",
-]
-easyocr = [
-    "easyocr>=1.7.0",
 ]
 
 [project.scripts]
