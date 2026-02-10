@@ -82,6 +82,19 @@ jobs:
             DIFFSTAT=$(git diff --stat HEAD~10..HEAD | tail -1)
           fi
 
+          # GitHub auto-generated release notes (label-categorized PRs + contributors)
+          GH_NOTES=""
+          if [ -n "$LAST_TAG" ]; then
+            GH_NOTES=$(gh api repos/${{ github.repository }}/releases/generate-notes \
+              -f tag_name="v${VERSION}" \
+              -f previous_tag_name="${LAST_TAG}" \
+              --jq '.body' 2>/dev/null || echo "")
+          else
+            GH_NOTES=$(gh api repos/${{ github.repository }}/releases/generate-notes \
+              -f tag_name="v${VERSION}" \
+              --jq '.body' 2>/dev/null || echo "")
+          fi
+
           cat > /tmp/release_context.txt << CTXEOF
           Version: ${VERSION}
           Previous version: ${LAST_TAG:-"(first release)"}
@@ -92,6 +105,9 @@ jobs:
 
           ## Pull Requests
           ${PRS}
+
+          ## GitHub Auto-Generated Notes (label-categorized with contributors)
+          ${GH_NOTES}
           CTXEOF
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -113,6 +129,7 @@ jobs:
           - Do NOT use emojis
           - Be factual, derive everything from the context below
           - If this is a major version bump, mention it
+          - Include a Contributors section at the end crediting GitHub usernames from the context
 
           Context:
           ${CONTEXT}"
