@@ -671,7 +671,7 @@ wheels = [
 
 [[package]]
 name = "legacylipi"
-version = "1.0.1"
+version = "1.0.2"
 source = { editable = "." }
 dependencies = [
     { name = "click" },

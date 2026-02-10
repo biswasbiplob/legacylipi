@@ -49,6 +49,20 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set up Node.js
+        if: steps.check_release.outputs.exists == 'false'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build frontend
+        if: steps.check_release.outputs.exists == 'false'
+        run: cd frontend && npm ci && npm run build
+
+      - name: Bundle frontend into package
+        if: steps.check_release.outputs.exists == 'false'
+        run: cp -r frontend/dist src/legacylipi/api/static
+
       - name: Build package
         if: steps.check_release.outputs.exists == 'false'
         run: uv build
