@@ -10,6 +10,7 @@ jobs:
 
     permissions:
       contents: write
+      models: read
 
     steps:
       - uses: actions/checkout@v4
@@ -48,35 +49,33 @@ jobs:
 
       - name: Gather release context
         if: steps.check_release.outputs.exists == 'false'
-        id: context
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
 
-          # Collect commits since last tag
+          # Commits since last tag
           if [ -n "$LAST_TAG" ]; then
             COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
           else
             COMMITS=$(git log -20 --pretty=format:"- %s (%h)" --no-merges)
           fi
 
-          # Collect merged PR titles and bodies
+          # Merged PR titles and bodies
+          PRS=""
           if [ -n "$LAST_TAG" ]; then
             TAG_DATE=$(git log -1 --format=%aI "$LAST_TAG")
-            PRS=$(gh pr list --state merged --search "merged:>=${TAG_DATE}" --json title,body,number --limit 50 \
+            PRS=$(gh pr list --state merged --search "merged:>=${TAG_DATE}" \
+              --json title,body,number --limit 50 \
               --jq '.[] | "### PR #\(.number): \(.title)\n\(.body // "No description.")\n"' 2>/dev/null || echo "")
-          else
-            PRS=""
           fi
 
-          # Collect short diffstat
+          # Diffstat
           if [ -n "$LAST_TAG" ]; then
             DIFFSTAT=$(git diff --stat "${LAST_TAG}..HEAD" | tail -1)
           else
             DIFFSTAT=$(git diff --stat HEAD~10..HEAD | tail -1)
           fi
 
-          # Write context to file for the LLM
           cat > /tmp/release_context.txt << CTXEOF
           Version: ${VERSION}
           Previous version: ${LAST_TAG:-"(first release)"}
@@ -88,61 +87,63 @@ jobs:
           ## Pull Requests
           ${PRS}
           CTXEOF
-
-          echo "context_file=/tmp/release_context.txt" >> $GITHUB_OUTPUT
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate AI release summary
-        if: steps.check_release.outputs.exists == 'false' && env.HAS_ANTHROPIC_KEY == 'true'
+        if: steps.check_release.outputs.exists == 'false'
         id: ai_summary
         run: |
           CONTEXT=$(cat /tmp/release_context.txt)
           VERSION="${{ steps.version.outputs.version }}"
 
-          # Call Anthropic API to generate release summary
-          RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
-            -H "content-type: application/json" \
-            -H "x-api-key: $ANTHROPIC_API_KEY" \
-            -H "anthropic-version: 2023-06-01" \
-            -d "$(jq -n \
-              --arg context "$CONTEXT" \
-              --arg version "$VERSION" \
-              '{
-                model: "claude-sonnet-4-5-20250514",
-                max_tokens: 1024,
-                messages: [{
-                  role: "user",
-                  content: ("You are writing release notes for an open-source Python project called LegacyLipi (a PDF translator for legacy Indian font encodings). Generate a concise, professional release summary for v" + $version + ".\n\nRules:\n- Start with a 1-2 sentence highlight of what this release brings\n- Group changes into sections: Features, Fixes, Breaking Changes (only if applicable)\n- Use bullet points, keep each point to one line\n- Do NOT include installation instructions (added separately)\n- Do NOT use emojis\n- Be factual, derive everything from the context below\n- If this is a major version bump, mention it\n\nContext:\n" + $context)
-                }]
-              }')" \
-          )
+          PROMPT="You are writing release notes for an open-source Python project called LegacyLipi (a PDF translator for legacy Indian font encodings). Generate a concise, professional release summary for v${VERSION}.
 
-          # Extract the text content from the response
-          SUMMARY=$(echo "$RESPONSE" | jq -r '.content[0].text // empty')
+          Rules:
+          - Start with a 1-2 sentence highlight of what this release brings
+          - Group changes into sections: Features, Fixes, Breaking Changes (only if applicable)
+          - Use bullet points, keep each point to one line
+          - Do NOT include installation instructions (added separately)
+          - Do NOT use emojis
+          - Be factual, derive everything from the context below
+          - If this is a major version bump, mention it
+
+          Context:
+          ${CONTEXT}"
+
+          RESPONSE=$(curl -sf https://models.inference.ai.azure.com/chat/completions \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg prompt "$PROMPT" \
+              '{
+                model: "gpt-4o",
+                max_tokens: 1024,
+                temperature: 0.3,
+                messages: [{role: "user", content: $prompt}]
+              }')" 2>&1) || true
+
+          SUMMARY=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty' 2>/dev/null)
 
           if [ -n "$SUMMARY" ]; then
             echo "$SUMMARY" > /tmp/ai_summary.md
             echo "generated=true" >> $GITHUB_OUTPUT
           else
             echo "generated=false" >> $GITHUB_OUTPUT
-            echo "API response: $RESPONSE" >&2
+            echo "AI summary unavailable, using fallback" >&2
           fi
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          HAS_ANTHROPIC_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Compose release notes
         if: steps.check_release.outputs.exists == 'false'
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          AI_GENERATED="${{ steps.ai_summary.outputs.generated || 'false' }}"
 
-          if [ "$AI_GENERATED" = "true" ]; then
-            # Use AI summary + auto-generated PR list
+          if [ "${{ steps.ai_summary.outputs.generated }}" = "true" ]; then
             cp /tmp/ai_summary.md release_notes.md
           else
-            # Fallback: use commit list
+            # Fallback: commit list
             LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
             if [ -n "$LAST_TAG" ]; then
               COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s" --no-merges)
