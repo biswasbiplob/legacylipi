@@ -2,6 +2,24 @@
 
 **Legacy Font PDF Translator** - Translate PDF documents with legacy Indian font encodings to English.
 
+## Problem
+
+Millions of government documents, legal papers, and archival materials in Indian regional languages (Marathi, Hindi, Tamil, etc.) were created using legacy font encoding systems (Shree-Lipi, Kruti Dev, APS, Chanakya, etc.). These fonts map Devanagari/regional script glyphs to ASCII/Latin code points, making them unreadable by standard translation tools.
+
+**Example:**
+- What the PDF displays: महाराष्ट्र राजभाषा अधिनियम
+- What text extraction produces: `´ÖÆüÖ¸üÖÂ™Òü ¸üÖ•Ö³ÖÖÂÖÖ †×¬Ö×®ÖμÖ´Ö`
+- What Google Translate sees: Gibberish
+
+## Solution
+
+LegacyLipi:
+1. **Detects** the font encoding scheme used in a PDF (legacy or Unicode)
+2. **Converts** legacy-encoded text to proper Unicode
+3. **Alternatively**, uses **OCR** (Tesseract or EasyOCR) to extract text from scanned PDFs
+4. **Translates** the Unicode text to the target language
+5. **Outputs** translated text in various formats (text, markdown, PDF) with optional bilingual side-by-side output
+
 ## Installation
 
 ### From PyPI (Recommended)
@@ -10,7 +28,13 @@
 pip install legacylipi
 ```
 
-Or with uv:
+Or with uv (one command, no install):
+
+```bash
+uvx legacylipi api
+```
+
+Or install as a tool:
 
 ```bash
 uv tool install legacylipi
@@ -24,16 +48,7 @@ cd legacylipi
 uv sync
 ```
 
-### Frontend (for development)
-
-```bash
-cd frontend
-npm install
-```
-
 ### Docker
-
-Build and run with Docker:
 
 ```bash
 # Build the image
@@ -53,60 +68,9 @@ To process local files, mount volumes:
 docker run -p 8000:8000 -v ./input:/app/input -v ./output:/app/output legacylipi
 ```
 
-### Usage
+### System Dependencies
 
-```bash
-# CLI translation
-legacylipi translate input.pdf -o output.txt
-
-# Launch React web UI (production build served by FastAPI)
-legacylipi api
-
-# Launch legacy NiceGUI web UI (deprecated)
-legacylipi ui
-```
-
-## Problem
-
-Millions of government documents, legal papers, and archival materials in Indian regional languages (Marathi, Hindi, Tamil, etc.) were created using legacy font encoding systems (Shree-Lipi, Kruti Dev, APS, Chanakya, etc.). These fonts map Devanagari/regional script glyphs to ASCII/Latin code points, making them unreadable by standard translation tools.
-
-**Example:**
-- What the PDF displays: महाराष्ट्र राजभाषा अधिनियम
-- What text extraction produces: `´ÖÆüÖ¸üÖÂ™Òü ¸üÖ•Ö³ÖÖÂÖÖ †×¬Ö×®ÖμÖ´Ö`
-- What Google Translate sees: Gibberish
-
-## Solution
-
-LegacyLipi:
-1. **Detects** the font encoding scheme used in a PDF (legacy or Unicode)
-2. **Converts** legacy-encoded text to proper Unicode
-3. **Alternatively**, uses **OCR** to extract text from scanned PDFs
-4. **Translates** the Unicode text to the target language
-5. **Outputs** translated text in various formats (text, markdown, PDF)
-
-## Installation
-
-```bash
-# Clone and install
-git clone https://github.com/biswasbiplob/legacylipi.git
-cd legacylipi
-uv sync
-
-# With all optional backends
-uv sync --all-extras
-```
-
-### OCR Support (Optional)
-
-LegacyLipi supports multiple OCR backends:
-
-| Backend | Description | GPU Support |
-|---------|-------------|-------------|
-| Tesseract | Local, free, most language packs | CPU only |
-| Google Vision | Cloud, paid, best accuracy | N/A |
-| EasyOCR | Local, free, good for Indian languages | CUDA, MPS (Apple Silicon) |
-
-**Tesseract (default):**
+**Tesseract** (for OCR - recommended):
 ```bash
 # Ubuntu/Debian
 sudo apt-get install tesseract-ocr tesseract-ocr-mar tesseract-ocr-hin
@@ -115,39 +79,35 @@ sudo apt-get install tesseract-ocr tesseract-ocr-mar tesseract-ocr-hin
 brew install tesseract tesseract-lang
 ```
 
-**EasyOCR with GPU (optional):**
+**Translate-Shell** (recommended translation backend):
 ```bash
-# Install with EasyOCR support
-uv sync --extra easyocr
+# Ubuntu/Debian
+sudo apt-get install translate-shell
 
-# For GPU acceleration, install PyTorch with CUDA or MPS support
+# macOS
+brew install translate-shell
 ```
-
-**Google Vision (optional):**
-```bash
-uv sync --extra vision
-# Requires GCP credentials (GOOGLE_APPLICATION_CREDENTIALS)
-```
-
-See [docs/cli-reference.md](docs/cli-reference.md) for detailed OCR options and language codes.
 
 ## Quick Start
 
 ```bash
 # Basic translation
-uv run legacylipi translate input.pdf -o output.txt
+legacylipi translate input.pdf -o output.txt
 
 # Output as PDF (preserves layout)
-uv run legacylipi translate input.pdf -o output.pdf --format pdf
+legacylipi translate input.pdf -o output.pdf --format pdf
+
+# Bilingual side-by-side output
+legacylipi translate input.pdf -o output.pdf --bilingual
 
 # OCR for scanned documents
-uv run legacylipi translate input.pdf --use-ocr -o output.txt
+legacylipi translate input.pdf --use-ocr -o output.txt
 
 # Use local LLM (requires Ollama)
-uv run legacylipi translate input.pdf --translator ollama --model llama3.2
+legacylipi translate input.pdf --translator ollama --model llama3.2
 
 # Detect encoding only
-uv run legacylipi detect input.pdf
+legacylipi detect input.pdf
 ```
 
 See [docs/cli-reference.md](docs/cli-reference.md) for complete CLI documentation.
@@ -160,9 +120,9 @@ LegacyLipi includes a modern React-based web interface backed by a FastAPI REST 
 
 ```bash
 # Serves the built React frontend + API on one port
-uv run legacylipi api
+legacylipi api
 # or
-uv run legacylipi-web
+uvx legacylipi api
 ```
 
 Open **http://localhost:8000** in your browser.
@@ -178,15 +138,6 @@ This runs:
 - **Backend** at http://localhost:8000 (FastAPI with auto-reload)
 - **Frontend** at http://localhost:5173 (Vite dev server with HMR, proxies `/api` to backend)
 
-### Legacy NiceGUI UI (deprecated)
-
-The original NiceGUI-based UI is still available but deprecated:
-
-```bash
-uv run legacylipi ui
-# Open http://localhost:8080
-```
-
 **Workflow Modes:**
 - **Scanned Copy** - Create image-based PDF copy (adjust DPI, color, quality)
 - **Convert to Unicode** - OCR + Unicode conversion without translation
@@ -196,11 +147,26 @@ uv run legacylipi ui
 - Drag-and-drop PDF upload
 - Workflow-based UI with mode selection
 - Multiple translation backends (Translate-Shell, Google, Ollama, OpenAI, etc.)
-- OCR support with engine and language selection
+- OCR support with EasyOCR and Tesseract engine selection
 - Structure-preserving or flowing text modes
+- Bilingual side-by-side output
+- Source language auto-detection from encoding
 - Real-time SSE progress streaming
 - Direct download of translated files
 - Responsive dark-theme design
+
+## Supported Encodings
+
+| Encoding | Font Family | Language | Status |
+|----------|-------------|----------|--------|
+| shree-dev | SHREE-DEV-0708, 0714, 0715, 0721 | Marathi | Built-in |
+| shree-lipi | Shree-Lipi, SDL-DEV | Marathi | Built-in |
+| dvb-tt | DVBWTTSurekh, DVBTTSurekh | Marathi | Built-in |
+| kruti-dev | KrutiDev010, KrutiDev040 | Hindi | Built-in |
+| chanakya | Chanakya | Hindi/Sanskrit | Built-in |
+| aps-dv | APS-DV-TT | Hindi | Built-in |
+| walkman-chanakya | Walkman Chanakya | Hindi | Built-in |
+| shusha | Shusha | Marathi/Hindi | Built-in |
 
 ## Translation Backends
 
@@ -215,39 +181,36 @@ uv run legacylipi ui
 
 See [docs/translation-backends.md](docs/translation-backends.md) for detailed setup guides.
 
-## Supported Encodings
+## OCR Backends
 
-| Encoding | Font Family | Language | Status |
-|----------|-------------|----------|--------|
-| shree-lipi | Shree-Lipi, Shree-Dev-0714 | Marathi | ✅ Built-in |
-| kruti-dev | Kruti Dev | Hindi | ✅ Built-in |
-| aps-dv | APS-DV | Hindi | 🔄 Detection only |
-| chanakya | Chanakya | Hindi | 🔄 Detection only |
-| dvb-tt | DVB-TT, DV-TTYogesh | Hindi | 🔄 Detection only |
-| walkman-chanakya | Walkman Chanakya | Hindi | 🔄 Detection only |
-| shusha | Shusha | Hindi | 🔄 Detection only |
+Both OCR engines are included as core dependencies:
+
+| Backend | Description | GPU Support |
+|---------|-------------|-------------|
+| EasyOCR | Local, free, good for Indian languages (default) | CUDA, MPS (Apple Silicon) |
+| Tesseract | Local, free, most language packs | CPU only |
+| Google Vision | Cloud, paid, best accuracy | N/A |
+
+Google Vision requires an additional install: `pip install legacylipi[vision]`
+
+See [docs/cli-reference.md](docs/cli-reference.md) for detailed OCR options and language codes.
 
 ## CLI Commands
 
 | Command | Description |
 |---------|-------------|
 | `api` | Launch the React web UI + FastAPI REST API |
-| `translate` | Full pipeline: parse → detect → convert → translate → output |
+| `translate` | Full pipeline: parse, detect, convert, translate, output |
 | `convert` | Convert legacy encoding to Unicode (no translation) |
 | `extract` | Extract text from PDF (OCR or font-based) |
 | `detect` | Analyze PDF and report detected encoding |
 | `scan-copy` | Create an image-based scanned copy of a PDF |
 | `encodings` | List supported font encodings |
 | `usage` | Show API usage statistics |
-| `ui` | Launch legacy NiceGUI web interface (deprecated) |
 
 See [docs/cli-reference.md](docs/cli-reference.md) for full command reference.
 
-## Development
-
-See [docs/development.md](docs/development.md) for setup instructions, running tests, project structure, and adding new encodings.
-
-### Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -268,23 +231,20 @@ See [docs/development.md](docs/development.md) for setup instructions, running t
 │  ┌──────────────────────────────────────────────────────────────────┐   │
 │  │                      Core Pipeline                               │   │
 │  │                                                                  │   │
-│  │  PDF Parser / OCR Parser                                         │   │
+│  │  PDF Parser / OCR Parser (Tesseract + EasyOCR)                   │   │
 │  │       │                                                          │   │
 │  │  Encoding Detector → Unicode Converter                           │   │
 │  │       │                                                          │   │
 │  │  Translation Engine (trans, Google, Ollama, OpenAI, GCP, ...)    │   │
 │  │       │                                                          │   │
-│  │  Output Generator (.txt, .md, .pdf)                              │   │
+│  │  Output Generator (.txt, .md, .pdf, bilingual)                   │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Pipeline Flow:**
-1. **Parse PDF** → Extract text with PDF parser or OCR
-2. **Detect Encoding** → Identify legacy encoding scheme
-3. **Convert to Unicode** → Transform legacy text to Unicode
-4. **Translate** → Use translation backend
-5. **Generate Output** → Create PDF/text/markdown
+## Development
+
+See [docs/development.md](docs/development.md) for setup instructions, running tests, project structure, and adding new encodings.
 
 ## License
 
@@ -296,7 +256,6 @@ Contributions are welcome! Please:
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Run tests (`uv run pytest`)
-5. Commit and push
-6. Open a Pull Request
+3. Run checks (`./scripts/check.sh`)
+4. Commit and push
+5. Open a Pull Request
