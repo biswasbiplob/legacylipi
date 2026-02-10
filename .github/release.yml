@@ -1,0 +1,24 @@
+changelog:
+  categories:
+    - title: "New Features"
+      labels:
+        - feature
+        - enhancement
+    - title: "Bug Fixes"
+      labels:
+        - bug
+        - fix
+    - title: "Breaking Changes"
+      labels:
+        - breaking
+    - title: "Infrastructure"
+      labels:
+        - infrastructure
+        - ci
+        - docker
+    - title: "Documentation"
+      labels:
+        - documentation
+    - title: "Other Changes"
+      labels:
+        - "*"

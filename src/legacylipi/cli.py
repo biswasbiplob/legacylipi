@@ -67,17 +67,13 @@ def main():
     pass
 
 
-@main.command()
-@click.option("--port", default=8080, type=int, help="Port to run the web UI on.")
-@click.option("--host", default="0.0.0.0", help="Host to bind to.")
-@click.option("--no-browser", is_flag=True, help="Don't open browser automatically.")
-def ui(port: int, host: str, no_browser: bool):
-    """Launch the LegacyLipi web interface."""
-    from legacylipi.ui.app import run_ui
-
-    print_banner()
-    console.print(f"[bold green]Starting web UI on http://{host}:{port}[/bold green]")
-    run_ui(port=port, host=host, show=not no_browser)
+@main.command(deprecated=True)
+def ui():
+    """[Removed] Use 'legacylipi api' instead."""
+    raise click.ClickException(
+        "The NiceGUI-based 'ui' command has been removed.\n"
+        "Use 'legacylipi api' to launch the new React web interface."
+    )
 
 
 @main.command()

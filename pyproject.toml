@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "legacylipi"
-version = "0.9.0"
+version = "1.0.0"
 description = "Legacy Font PDF Translator - Translate PDFs with legacy Indian font encodings to English"
 readme = "README.md"
 license = "MIT"
@@ -31,24 +31,14 @@ dependencies = [
     "tenacity>=8.2.0",
     "deep-translator>=1.11.4",
     "pypdfium2>=5.3.0",
-]
-
-[project.optional-dependencies]
-ui = [
-    "nicegui>=2.0.0",
-]
-ocr = [
-    "pytesseract>=0.3.13",
-    "pillow>=12.1.0",
-]
-api = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.30.0",
     "python-multipart>=0.0.9",
+    "pytesseract>=0.3.13",
+    "pillow>=12.1.0",
 ]
-all = [
-    "legacylipi[ui,ocr,api]",
-]
+
+[project.optional-dependencies]
 dev = [
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
@@ -74,7 +64,6 @@ easyocr = [
 
 [project.scripts]
 legacylipi = "legacylipi.cli:main"
-legacylipi-ui = "legacylipi.ui.app:main"
 legacylipi-web = "legacylipi.api.main:serve"
 
 [project.urls]

@@ -802,24 +802,15 @@ class TestScanCopyCommand:
 
 
 class TestUICommand:
-    """Tests for the ui command."""
+    """Tests for the deprecated ui command."""
 
-    def test_ui_help(self, runner):
-        """Test ui command help."""
-        result = runner.invoke(main, ["ui", "--help"])
+    def test_ui_shows_removal_message(self, runner):
+        """Test that ui command tells users to use 'api' instead."""
+        result = runner.invoke(main, ["ui"])
 
-        assert result.exit_code == 0
-        assert "Launch the LegacyLipi web interface" in result.output
-        assert "--port" in result.output
-        assert "--host" in result.output
-        assert "--no-browser" in result.output
-
-    def test_ui_in_main_help(self, runner):
-        """Test that ui command appears in main help."""
-        result = runner.invoke(main, ["--help"])
-
-        assert result.exit_code == 0
-        assert "ui" in result.output
+        assert result.exit_code != 0
+        assert "removed" in result.output.lower() or "Removed" in result.output
+        assert "legacylipi api" in result.output
 
 
 class TestErrorHandling:

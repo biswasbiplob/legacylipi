@@ -3,20 +3,25 @@ name: Release
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (skip release creation and PyPI publish)"
+        type: boolean
+        default: true
 
 jobs:
   release:
     runs-on: ubuntu-latest
-    # Only run after CI passes
-    needs: []
 
     permissions:
-      contents: write  # Required for creating releases
+      contents: write
+      models: read
 
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Fetch all history for changelog generation
+          fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
@@ -48,39 +53,157 @@ jobs:
         if: steps.check_release.outputs.exists == 'false'
         run: uv build
 
-      - name: Generate release notes
+      - name: Gather release context
         if: steps.check_release.outputs.exists == 'false'
-        id: release_notes
         run: |
-          # Get commits since last tag
+          VERSION="${{ steps.version.outputs.version }}"
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
 
+          # Commits since last tag
           if [ -n "$LAST_TAG" ]; then
-            COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s" --no-merges)
+            COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
           else
-            COMMITS=$(git log -20 --pretty=format:"- %s" --no-merges)
+            COMMITS=$(git log -20 --pretty=format:"- %s (%h)" --no-merges)
           fi
 
-          # Create release notes
-          cat << EOF > release_notes.md
-          ## LegacyLipi v${{ steps.version.outputs.version }}
+          # Merged PR titles and bodies
+          PRS=""
+          if [ -n "$LAST_TAG" ]; then
+            TAG_DATE=$(git log -1 --format=%aI "$LAST_TAG")
+            PRS=$(gh pr list --state merged --search "merged:>=${TAG_DATE}" \
+              --json title,body,number --limit 50 \
+              --jq '.[] | "### PR #\(.number): \(.title)\n\(.body // "No description.")\n"' 2>/dev/null || echo "")
+          fi
 
-          ### Changes
+          # Diffstat
+          if [ -n "$LAST_TAG" ]; then
+            DIFFSTAT=$(git diff --stat "${LAST_TAG}..HEAD" | tail -1)
+          else
+            DIFFSTAT=$(git diff --stat HEAD~10..HEAD | tail -1)
+          fi
+
+          # GitHub auto-generated release notes (label-categorized PRs + contributors)
+          GH_NOTES=""
+          if [ -n "$LAST_TAG" ]; then
+            GH_NOTES=$(gh api repos/${{ github.repository }}/releases/generate-notes \
+              -f tag_name="v${VERSION}" \
+              -f previous_tag_name="${LAST_TAG}" \
+              --jq '.body' 2>/dev/null || echo "")
+          else
+            GH_NOTES=$(gh api repos/${{ github.repository }}/releases/generate-notes \
+              -f tag_name="v${VERSION}" \
+              --jq '.body' 2>/dev/null || echo "")
+          fi
+
+          cat > /tmp/release_context.txt << CTXEOF
+          Version: ${VERSION}
+          Previous version: ${LAST_TAG:-"(first release)"}
+          Diffstat: ${DIFFSTAT}
+
+          ## Commits
           ${COMMITS}
 
-          ### Installation
-          \`\`\`bash
-          pip install legacylipi-${{ steps.version.outputs.version }}-py3-none-any.whl
-          \`\`\`
+          ## Pull Requests
+          ${PRS}
 
-          Or install from PyPI:
+          ## GitHub Auto-Generated Notes (label-categorized with contributors)
+          ${GH_NOTES}
+          CTXEOF
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate AI release summary
+        if: steps.check_release.outputs.exists == 'false'
+        id: ai_summary
+        run: |
+          CONTEXT=$(cat /tmp/release_context.txt)
+          VERSION="${{ steps.version.outputs.version }}"
+
+          PROMPT="You are writing release notes for an open-source Python project called LegacyLipi (a PDF translator for legacy Indian font encodings). Generate a concise, professional release summary for v${VERSION}.
+
+          Rules:
+          - Start with a 1-2 sentence highlight of what this release brings
+          - Group changes into sections: Features, Fixes, Breaking Changes (only if applicable)
+          - Use bullet points, keep each point to one line
+          - Do NOT include installation instructions (added separately)
+          - Do NOT use emojis
+          - Be factual, derive everything from the context below
+          - If this is a major version bump, mention it
+          - Include a Contributors section at the end crediting GitHub usernames from the context
+
+          Context:
+          ${CONTEXT}"
+
+          RESPONSE=$(curl -sf https://models.inference.ai.azure.com/chat/completions \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg prompt "$PROMPT" \
+              '{
+                model: "gpt-4o",
+                max_tokens: 1024,
+                temperature: 0.3,
+                messages: [{role: "user", content: $prompt}]
+              }')" 2>&1) || true
+
+          SUMMARY=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty' 2>/dev/null)
+
+          if [ -n "$SUMMARY" ]; then
+            echo "$SUMMARY" > /tmp/ai_summary.md
+            echo "generated=true" >> $GITHUB_OUTPUT
+          else
+            echo "generated=false" >> $GITHUB_OUTPUT
+            echo "AI summary unavailable, using fallback" >&2
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compose release notes
+        if: steps.check_release.outputs.exists == 'false'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          if [ "${{ steps.ai_summary.outputs.generated }}" = "true" ]; then
+            cp /tmp/ai_summary.md release_notes.md
+          else
+            # Fallback: commit list
+            LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            if [ -n "$LAST_TAG" ]; then
+              COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s" --no-merges)
+            else
+              COMMITS=$(git log -20 --pretty=format:"- %s" --no-merges)
+            fi
+
+            cat > release_notes.md << EOF
+          ## What's Changed
+
+          ${COMMITS}
+          EOF
+          fi
+
+          # Append installation instructions
+          cat >> release_notes.md << EOF
+
+          ---
+
+          ### Installation
+
           \`\`\`bash
-          pip install legacylipi==${{ steps.version.outputs.version }}
+          pip install legacylipi==${VERSION}
+          uv tool install legacylipi==${VERSION}
+          uvx legacylipi api
           \`\`\`
           EOF
 
+      - name: Preview release notes (dry run)
+        if: steps.check_release.outputs.exists == 'false' && inputs.dry_run == true
+        run: |
+          echo "::notice::DRY RUN — skipping release creation and PyPI publish"
+          echo "--- Generated release notes ---"
+          cat release_notes.md
+
       - name: Create GitHub Release
-        if: steps.check_release.outputs.exists == 'false'
+        if: steps.check_release.outputs.exists == 'false' && inputs.dry_run != true
         run: |
           gh release create "${{ steps.version.outputs.tag }}" \
             dist/legacylipi-${{ steps.version.outputs.version }}-py3-none-any.whl \
@@ -91,7 +214,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to PyPI
-        if: steps.check_release.outputs.exists == 'false'
+        if: steps.check_release.outputs.exists == 'false' && inputs.dry_run != true
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
