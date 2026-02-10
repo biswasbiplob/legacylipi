@@ -1059,7 +1059,9 @@ def list_encodings(search: str | None):
 def api(port: int, host: str):
     """Launch the LegacyLipi REST API + React frontend."""
     try:
-        from legacylipi.api.main import serve
+        from legacylipi.api.main import _check_deps, serve
+
+        _check_deps()
     except ImportError as e:
         raise click.ClickException(
             f"API dependencies not installed: {e}\n"
